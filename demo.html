@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang='en'>
+<head>
+<meta charset='UTF-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1.0'>
+<title>Flash Assistant Ticketing Demo</title>
+<style>
+:root{
+  --primary:#4f46e5;
+  --accent:#8b5cf6;
+  --bg:#f5f7fb;
+  --surface:rgba(255,255,255,.86);
+  --border:rgba(99,102,241,.14);
+  --text:#0f172a;
+  --muted:#64748b;
+  --success:#10b981;
+  --warning:#f59e0b;
+  --danger:#ef4444;
+  --shadow:0 24px 80px rgba(15,23,42,.12);
+}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%;font-family:Inter,Segoe UI,Arial,sans-serif;background:radial-gradient(circle at top left,#eef2ff 0,#f8fafc 38%,#eef4ff 100%);color:var(--text)}
+body{padding:18px}
+button,input,select,textarea{font:inherit}
+.app{display:grid;grid-template-columns:280px 1fr;gap:18px;min-height:calc(100vh - 36px)}
+.sidebar,.main,.card,.drawer,.chat-window{backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)}
+.sidebar{background:linear-gradient(180deg,rgba(15,23,42,.93),rgba(30,41,59,.9));color:#e2e8f0;border-radius:28px;padding:24px 18px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:18px}
+.brand{display:flex;gap:12px;align-items:center;padding:8px 10px 18px;border-bottom:1px solid rgba(255,255,255,.1)}
+.brand-mark{width:42px;height:42px;border-radius:14px;background:linear-gradient(135deg,var(--primary),var(--accent));display:grid;place-items:center;font-weight:800;box-shadow:0 12px 30px rgba(79,70,229,.35)}
+.brand h1{margin:0;font-size:17px}.brand p{margin:2px 0 0;color:#94a3b8;font-size:12px}
+.sec{padding:0 10px;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:#94a3b8}
+.nav{display:grid;gap:8px}.nav-item{display:flex;gap:12px;align-items:center;padding:12px 14px;border-radius:16px;color:#dbeafe;border:1px solid transparent}.nav-item.active,.nav-item:hover{background:rgba(99,102,241,.18);border-color:rgba(167,139,250,.2)}
+.dot{width:10px;height:10px;border-radius:50%;background:linear-gradient(135deg,#a78bfa,#60a5fa);box-shadow:0 0 0 4px rgba(167,139,250,.15)}
+.sidebar-note{margin-top:auto;padding:16px;border-radius:20px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.1)}
+.sidebar-note strong{display:block;margin-bottom:6px}.sidebar-note p{margin:0;color:#cbd5e1;font-size:13px;line-height:1.5}
+.main{background:linear-gradient(180deg,rgba(255,255,255,.8),rgba(255,255,255,.74));border:1px solid rgba(255,255,255,.7);border-radius:32px;box-shadow:var(--shadow);overflow:hidden}
+.top{display:flex;justify-content:space-between;align-items:flex-start;gap:18px;padding:26px 28px 18px;border-bottom:1px solid rgba(99,102,241,.08)}
+.title h2{margin:0;font-size:30px;letter-spacing:-.04em}.title p{margin:6px 0 0;color:var(--muted)}
+.controls{display:flex;gap:12px;flex-wrap:wrap;justify-content:flex-end}
+.box,.search,textarea,input[type='text'],select{border:1px solid var(--border);background:rgba(255,255,255,.96);border-radius:16px;color:var(--text)}
+.search{min-width:240px;display:flex;align-items:center;gap:10px;padding:0 14px}.search input{border:0;background:transparent;width:100%;min-height:44px;outline:none}.box{min-height:44px;padding:0 14px}
+.wrap{padding:24px 28px 28px;display:grid;gap:18px}
+.notice{display:flex;justify-content:space-between;gap:14px;align-items:center;flex-wrap:wrap;padding:16px 18px;border-radius:22px;background:linear-gradient(135deg,rgba(79,70,229,.08),rgba(14,165,233,.08));border:1px solid rgba(79,70,229,.14)}
+.notice strong{display:block;margin-bottom:4px}.muted{color:var(--muted)}
+.pills{display:flex;gap:10px;flex-wrap:wrap}.pill,.badge{border-radius:999px;font-size:12px;font-weight:700;white-space:nowrap}.pill{padding:9px 14px;background:rgba(255,255,255,.9);color:var(--primary);border:1px solid rgba(79,70,229,.14)}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}.card{background:var(--surface);border:1px solid rgba(255,255,255,.65);border-radius:24px;box-shadow:0 18px 44px rgba(15,23,42,.08)}
+.stat{padding:20px}.stat-label{color:var(--muted);font-size:12px;letter-spacing:.12em;text-transform:uppercase}.stat-value{margin:12px 0 6px;font-size:34px;font-weight:800;letter-spacing:-.04em}.stat-sub{color:var(--muted);font-size:13px}
+.grid{display:grid;grid-template-columns:1.05fr 1.35fr;gap:18px;align-items:start}
+.head{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:22px 22px 0}.head h3{margin:0;font-size:20px;letter-spacing:-.03em}.head p{margin:6px 0 0;color:var(--muted);font-size:13px}.body{padding:18px 22px 22px}
+.form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.field{display:grid;gap:8px}.field label{color:var(--muted);font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.12em}.full{grid-column:1 / -1}
+input[type='text'],select,textarea{width:100%;padding:13px 14px;outline:none}textarea{min-height:92px;resize:vertical}.compact{min-height:74px}
+.btn{border:0;border-radius:16px;min-height:46px;padding:0 18px;cursor:pointer;transition:transform .18s ease}.btn:hover{transform:translateY(-1px)}
+.primary{background:linear-gradient(135deg,var(--primary),var(--accent));color:#fff;box-shadow:0 16px 28px rgba(79,70,229,.22)}
+.secondary{background:rgba(79,70,229,.08);color:var(--primary)}
+.ghost{background:transparent;border:1px solid var(--border);color:var(--text)}
+.danger{background:rgba(239,68,68,.1);color:var(--danger)}
+.actions,.queue-tools{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.table-wrap{overflow:auto}.table{width:100%;border-collapse:collapse;min-width:760px}.table th,.table td{text-align:left;padding:14px 12px;border-bottom:1px solid rgba(148,163,184,.16);vertical-align:top}.table th{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em}.table td{font-size:14px}
+.ticket{font-weight:800;color:var(--primary)}
+.badge{display:inline-flex;align-items:center;gap:6px;padding:6px 10px}.workflow{background:rgba(79,70,229,.09);color:var(--primary)}.policy{background:rgba(14,165,233,.09);color:#0369a1}.success{background:rgba(16,185,129,.12);color:#047857}.warning{background:rgba(245,158,11,.14);color:#b45309}.danger-badge{background:rgba(239,68,68,.12);color:#b91c1c}.neutral{background:rgba(100,116,139,.12);color:#475569}
+.kb{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}.kb-item{padding:16px;border-radius:18px;background:rgba(255,255,255,.7);border:1px solid rgba(99,102,241,.1)}.kb-item h4{margin:0 0 8px;font-size:15px}.kb-item p{margin:0 0 12px;color:var(--muted);font-size:13px;line-height:1.5}.small-list{display:flex;flex-wrap:wrap;gap:8px}
+.backdrop{position:fixed;inset:0;background:rgba(15,23,42,.44);opacity:0;pointer-events:none;transition:opacity .2s ease}.backdrop.open{opacity:1;pointer-events:auto}
+.drawer{position:fixed;top:0;right:0;width:min(520px,100%);height:100%;background:rgba(248,250,252,.96);border-left:1px solid rgba(99,102,241,.12);box-shadow:-20px 0 60px rgba(15,23,42,.18);transform:translateX(100%);transition:transform .24s ease;display:flex;flex-direction:column;z-index:12}.drawer.open{transform:translateX(0)}
+.drawer-head{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:22px 22px 14px;border-bottom:1px solid rgba(99,102,241,.08)}.drawer-body{padding:20px 22px 28px;overflow:auto;display:grid;gap:18px}.info{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.info-box{padding:14px;border-radius:18px;background:#fff;border:1px solid rgba(148,163,184,.16)}.info-box span{display:block;color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px}
+.timeline{display:grid;gap:12px}.timeline-item{padding-left:18px;border-left:2px solid rgba(79,70,229,.18);position:relative}.timeline-item::before{content:'';position:absolute;left:-6px;top:6px;width:10px;height:10px;border-radius:50%;background:var(--primary)}
+.toasts{position:fixed;top:18px;right:18px;display:grid;gap:10px;z-index:30}.toast{background:rgba(15,23,42,.88);color:#fff;padding:13px 14px;border-radius:16px;min-width:260px;box-shadow:0 18px 40px rgba(15,23,42,.24)}.toast small{display:block;opacity:.72;margin-top:3px}
+.ai{position:fixed;right:22px;bottom:22px;z-index:22}.ai-toggle{width:68px;height:68px;border-radius:22px;border:0;cursor:pointer;color:#fff;background:linear-gradient(135deg,#111827,var(--primary));box-shadow:0 20px 50px rgba(79,70,229,.34)}
+.chat-window{position:absolute;right:0;bottom:86px;width:min(390px,calc(100vw - 26px));height:520px;border-radius:28px;background:rgba(255,255,255,.94);border:1px solid rgba(99,102,241,.12);box-shadow:var(--shadow);display:none;overflow:hidden}.chat-window.open{display:grid;grid-template-rows:auto 1fr auto}.chat-head{display:flex;justify-content:space-between;align-items:center;padding:18px 18px 14px;border-bottom:1px solid rgba(99,102,241,.08)}.chat-body{padding:16px 18px;overflow:auto;display:grid;gap:12px;align-content:start;background:linear-gradient(180deg,rgba(238,242,255,.48),rgba(255,255,255,.78))}.msg{max-width:85%;padding:12px 14px;border-radius:18px;line-height:1.5;font-size:14px;white-space:pre-line}.msg.bot{background:#fff;border:1px solid rgba(148,163,184,.15)}.msg.user{margin-left:auto;background:linear-gradient(135deg,var(--primary),var(--accent));color:#fff}.chips{display:flex;gap:8px;flex-wrap:wrap}.chip{border:1px solid rgba(79,70,229,.15);background:rgba(255,255,255,.9);color:var(--primary);border-radius:999px;padding:8px 12px;font-size:12px;font-weight:700;cursor:pointer}.chat-foot{padding:14px 18px 18px;border-top:1px solid rgba(99,102,241,.08);display:flex;gap:10px}.chat-foot input{flex:1}.chat-foot button{width:48px;min-width:48px}
+.loader{display:inline-flex;gap:6px;align-items:center}.dot-loader{width:8px;height:8px;border-radius:50%;background:var(--primary);display:inline-block;animation:pulse 1s infinite ease-in-out}.dot-loader:nth-child(2){animation-delay:.12s}.dot-loader:nth-child(3){animation-delay:.24s}
+.empty{text-align:center;color:var(--muted);padding:34px 18px}.hidden{display:none !important}
+@keyframes pulse{0%,80%,100%{transform:scale(.7);opacity:.35}40%{transform:scale(1);opacity:1}}
+@media (max-width:1180px){.stats,.kb{grid-template-columns:repeat(2,minmax(0,1fr))}.grid{grid-template-columns:1fr}}
+@media (max-width:920px){body{padding:10px}.app{grid-template-columns:1fr}.sidebar{order:2}.top{flex-direction:column}.controls{width:100%;justify-content:stretch}.search,.box{width:100%}}
+@media (max-width:640px){.stats,.kb,.form,.info{grid-template-columns:1fr}.wrap,.top{padding-left:16px;padding-right:16px}}
+</style>
+</head>
+<body>
+<div class='toasts' id='toasts'></div>
+<div class='app'>
+  <aside class='sidebar'>
+    <div class='brand'>
+      <div class='brand-mark'>▶</div>
+      <div>
+        <h1>Demo Hub</h1>
+        <p>QA workspace • static mock build</p>
+      </div>
+    </div>
+    <div class='sec'>Operations</div>
+    <div class='nav'>
+      <div class='nav-item active'><span class='dot'></span><span>Dashboard</span></div>
+      <div class='nav-item'><span class='dot'></span><span>Master Schedule</span></div>
+      <div class='nav-item'><span class='dot'></span><span>Demo Slide</span></div>
+    </div>
+    <div class='sec'>Knowledge Channels</div>
+    <div class='nav'>
+      <div class='nav-item'><span class='dot'></span><span>General KB</span></div>
+      <div class='nav-item'><span class='dot'></span><span>Process KB</span></div>
+      <div class='nav-item'><span class='dot'></span><span>Playbook</span></div>
+    </div>
+    <div class='sidebar-note'>
+      <strong>Live Interactive Demo</strong>
+      <p>This page is fully local. All original Apps Script and Google Sheets calls are replaced by async mock methods and in-memory data.</p>
+    </div>
+  </aside>
+
+  <main class='main'>
+    <div class='top'>
+      <div class='title'>
+        <h2>Flash Assistant Ticketing</h2>
+        <p>Standalone static replica of the QA intake, review queue, and Jixy AI assistant experience.</p>
+      </div>
+      <div class='controls'>
+        <div class='search'><span>🔎</span><input id='tableSearch' type='text' placeholder='Search tickets, prompts, or verdicts'></div>
+        <select class='box' id='workflowFilter'></select>
+        <select class='box' id='policyFilter'></select>
+      </div>
+    </div>
+
+    <div class='wrap'>
+      <section class='notice'>
+        <div>
+          <strong>Zero backend required</strong>
+          <div class='muted'>This demo strips GAS scriptlets and replaces every server interaction with local asynchronous mock functions using setTimeout.</div>
+        </div>
+        <div class='pills'>
+          <span class='pill'>WF-DEMO-01</span>
+          <span class='pill'>Policy Category A</span>
+          <span class='pill'>Policy Category B</span>
+          <span class='pill'>Jixy AI mock KB</span>
+        </div>
+      </section>
+
+      <section class='stats' id='stats'></section>
+
+      <section class='grid'>
+        <article class='card'>
+          <div class='head'>
+            <div>
+              <h3>New mock intake</h3>
+              <p>Submit a sample ticket and it instantly lands in the local review queue.</p>
+            </div>
+            <span class='badge workflow'>Async mock submit</span>
+          </div>
+          <div class='body'>
+            <form id='ticketForm'>
+              <div class='form'>
+                <div class='field'>
+                  <label for='requester'>Requester</label>
+                  <input id='requester' type='text' value='Avery Stone' required>
+                </div>
+                <div class='field'>
+                  <label for='job'>Job / Queue</label>
+                  <input id='job' type='text' value='Jobs Intake' required>
+                </div>
+                <div class='field'>
+                  <label for='workflowInput'>Workflow</label>
+                  <select id='workflowInput'></select>
+                </div>
+                <div class='field'>
+                  <label for='policyInput'>Policy category</label>
+                  <select id='policyInput'></select>
+                </div>
+                <div class='field full'>
+                  <label for='userPrompt'>User prompt context</label>
+                  <textarea id='userPrompt'>Customer asks whether a promotional claim can be approved for WF-DEMO-01 without escalation.</textarea>
+                </div>
+                <div class='field full'>
+                  <label for='botReply'>Model bot response</label>
+                  <textarea id='botReply'>The draft response approves the claim but does not cite the latest review checklist or add the escalation handoff note.</textarea>
+                </div>
+                <div class='field full'>
+                  <label for='notes'>QA notes</label>
+                  <textarea class='compact' id='notes'>Possible missing evidence requirement. Route to Policy Category B if promotional language is customer-facing.</textarea>
+                </div>
+              </div>
+              <div class='actions' style='margin-top:16px'>
+                <button class='btn primary' type='submit'>Submit mock entry</button>
+                <button class='btn secondary' type='button' id='seedBtn'>Load another realistic sample</button>
+              </div>
+            </form>
+          </div>
+        </article>
+
+        <article class='card'>
+          <div class='head'>
+            <div>
+              <h3>Live review queue</h3>
+              <p>Click Evaluate to open the side-sheet review panel, change the verdict, and save locally.</p>
+            </div>
+            <div class='queue-tools'>
+              <span class='badge neutral' id='queueCount'>0 visible</span>
+              <button class='btn ghost' id='resetBtn' type='button'>Reset filters</button>
+            </div>
+          </div>
+          <div class='body table-wrap'>
+            <table class='table'>
+              <thead>
+                <tr>
+                  <th>Ticket</th>
+                  <th>Workflow</th>
+                  <th>Policy</th>
+                  <th>Verdict</th>
+                  <th>Assignee</th>
+                  <th>SLA</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id='tableBody'></tbody>
+            </table>
+            <div class='empty hidden' id='emptyState'>No mock tickets match the current filters.</div>
+          </div>
+        </article>
+      </section>
+
+      <section class='card'>
+        <div class='head'>
+          <div>
+            <h3>Jixy memory cards</h3>
+            <p>Mock knowledge entries used by the floating AI assistant search flow.</p>
+          </div>
+          <span class='badge success'>3 knowledge channels</span>
+        </div>
+        <div class='body'>
+          <div class='kb' id='kbGrid'></div>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
+
+<div class='backdrop' id='backdrop'></div>
+<aside class='drawer' id='drawer'>
+  <div class='drawer-head'>
+    <div>
+      <div class='muted' style='text-transform:uppercase;letter-spacing:.12em;font-size:12px'>Case inspector</div>
+      <h3 id='drawerTitle' style='margin:6px 0 0'>Select a ticket</h3>
+    </div>
+    <button class='btn ghost' type='button' id='closeDrawer'>Close</button>
+  </div>
+  <div class='drawer-body'>
+    <div class='info' id='infoGrid'></div>
+
+    <div class='card' style='background:#fff'>
+      <div class='body'>
+        <div class='field'>
+          <label>User prompt context</label>
+          <textarea id='sheetPrompt' readonly></textarea>
+        </div>
+        <div class='field'>
+          <label>Model bot response</label>
+          <textarea id='sheetReply' readonly></textarea>
+        </div>
+      </div>
+    </div>
+
+    <div class='card' style='background:#fff'>
+      <div class='body'>
+        <div class='form'>
+          <div class='field'>
+            <label for='sheetVerdict'>QA verdict</label>
+            <select id='sheetVerdict'></select>
+          </div>
+          <div class='field'>
+            <label for='sheetOwner'>Assignee</label>
+            <input id='sheetOwner' type='text'>
+          </div>
+          <div class='field full'>
+            <label for='sheetNotes'>Evaluation notes</label>
+            <textarea id='sheetNotes'></textarea>
+          </div>
+        </div>
+        <div class='actions' style='margin-top:16px'>
+          <button class='btn primary' type='button' id='saveEval'>Save local evaluation</button>
+          <button class='btn danger' type='button' id='escalate'>Mark as escalated</button>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class='muted' style='text-transform:uppercase;letter-spacing:.12em;font-size:12px;margin-bottom:12px'>Mock activity timeline</div>
+      <div class='timeline' id='timeline'></div>
+    </div>
+  </div>
+</aside>
+
+<div class='ai'>
+  <div class='chat-window' id='chatWindow'>
+    <div class='chat-head'>
+      <div>
+        <strong>Jixy AI</strong>
+        <div class='muted' style='font-size:12px'>Local canned search over mock workflow data</div>
+      </div>
+      <button class='btn ghost' type='button' id='closeAi'>×</button>
+    </div>
+    <div class='chat-body' id='chatBody'>
+      <div class='msg bot'>👋 Hi, I am <strong>Jixy</strong>. Ask about WF-DEMO-01, Policy Category A/B, escalation criteria, or request a filtered queue.</div>
+      <div class='chips' id='chips'>
+        <button class='chip' type='button' data-query='How does the app work?'>How it works</button>
+        <button class='chip' type='button' data-query='Show WF-DEMO-01 tickets'>WF-DEMO-01</button>
+        <button class='chip' type='button' data-query='What is Policy Category B?'>Policy Category B</button>
+      </div>
+    </div>
+    <div class='chat-foot'>
+      <input id='aiInput' type='text' placeholder='Ask Jixy anything about the demo'>
+      <button class='btn primary' id='sendAi' type='button'>➜</button>
+    </div>
+  </div>
+  <button class='ai-toggle' id='toggleAi' type='button' aria-label='Open Jixy AI'>✦</button>
+</div>
+
+<script>
+const cloneData = payload => payload === undefined ? undefined : JSON.parse(JSON.stringify(payload));
+const mockData = {
+  workflows:['ALL','WF-DEMO-01','ST/O18','NPOV','Workspace/WS'],
+  policyCategories:['ALL','Policy Category A','Policy Category B'],
+  qaVerdicts:['Approved','Needs Edit','Escalate','QA Escalated'],
+  knowledgeBase:[
+    {id:'kb-1',channel:'General KB',title:'WF-DEMO-01 launch checklist',summary:'Use this when reviewing product launch drafts. Confirm evidence, cite the latest checklist, and add the escalation handoff when uncertainty remains.',triggers:['wf-demo-01','launch checklist','handoff']},
+    {id:'kb-2',channel:'Process KB',title:'Policy Category A quick path',summary:'For low-risk support copy: verify tone, confirm no unsupported claims, and close as Approved when citations are present.',triggers:['policy category a','support copy','approved']},
+    {id:'kb-3',channel:'Playbook',title:'Policy Category B escalation rules',summary:'For promotional or customer-facing claims: require evidence, add QA notes, and escalate if disclaimers or substantiation are missing.',triggers:['policy category b','promotional','evidence']}
+  ],
+  samples:[
+    {requester:'Cam Diaz',job:'Appeals Queue',workflow:'WF-DEMO-01',policy:'Policy Category B',user:'Can we approve the customer-facing promo message for the new release?',bot:'Draft says yes but skips the evidence callout and does not mention the required disclaimer.',notes:'This likely needs escalation because promotional language appears externally.'},
+    {requester:'Noah Reed',job:'Partner Support',workflow:'ST/O18',policy:'Policy Category A',user:'Support team needs a short answer for a troubleshooting article.',bot:'Response is mostly correct but needs a cleaner customer-safe explanation.',notes:'Low risk. Edit and approve if wording is aligned.'}
+  ],
+  tickets:[
+    {id:'TKT-2401',workflow:'WF-DEMO-01',policy:'Policy Category B',verdict:'QA Escalated',requester:'Lena Morris',job:'Jobs Intake',assignee:'Mina Patel',sla:'18m left',status:'Escalated',user:'Customer asks if the promo banner can say instant approval for all cases.',bot:'Draft approves the statement without asking for substantiation or disclaimer language.',notes:'Missing evidence requirement. Route to promo review lane.',timeline:[{label:'Submitted',detail:'Imported from WF-DEMO-01 intake with local mock payload.'},{label:'Auto triage',detail:'Flagged because customer-facing promotional copy matched Policy Category B.'},{label:'QA action',detail:'Escalated pending evidence and disclaimer confirmation.'}]},
+    {id:'TKT-2402',workflow:'WF-DEMO-01',policy:'Policy Category A',verdict:'Needs Edit',requester:'Owen Brooks',job:'Content Review',assignee:'Jordan Blake',sla:'42m left',status:'In Review',user:'Need a safe version of a support response about turnaround time.',bot:'Helpful answer, but it overstates certainty and should cite the latest queue guidance.',notes:'Likely approvable after a minor wording pass.',timeline:[{label:'Submitted',detail:'Queued from mock support content review feed.'},{label:'Reviewer assigned',detail:'Jordan Blake picked up the case for same-hour handling.'}]},
+    {id:'TKT-2403',workflow:'ST/O18',policy:'Policy Category A',verdict:'Approved',requester:'Gia Shah',job:'Help Center',assignee:'Harper Cole',sla:'Closed',status:'Closed',user:'Create a brief explanation for a generic account setting question.',bot:'Answer is accurate, scoped, and includes proper support framing.',notes:'Approved as-is during the previous QA pass.',timeline:[{label:'Submitted',detail:'Mock historical ticket loaded from local demo data.'},{label:'QA action',detail:'Approved with no additional escalation.'}]},
+    {id:'TKT-2404',workflow:'WF-DEMO-01',policy:'Policy Category B',verdict:'Escalate',requester:'Maya Chen',job:'Launch QA',assignee:'Riley Frost',sla:'7m left',status:'Hot',user:'Can launch copy claim guaranteed results if we have only partial evidence?',bot:'Response suggests approval with light edits and does not account for evidence gaps.',notes:'Needs immediate escalation to policy lead.',timeline:[{label:'Submitted',detail:'Mock launch review record detected as high urgency.'},{label:'Auto triage',detail:'SLA boosted because the request is customer-facing and time-sensitive.'}]}
+  ]
+};
+const state = {tickets:cloneData(mockData.tickets),filters:{workflow:'ALL',policy:'ALL',query:''},selected:null,sampleIndex:0};
+const mockServer = {
+  wait(payload,ms){return new Promise(resolve=>setTimeout(()=>resolve(cloneData(payload)),ms||420))},
+  load(){return this.wait({workflows:mockData.workflows,policies:mockData.policyCategories,verdicts:mockData.qaVerdicts,kb:mockData.knowledgeBase},360)},
+  fetch(filters){
+    const q=(filters.query||'').trim().toLowerCase();
+    const rows=state.tickets.filter(ticket=>{
+      const workflowOk=filters.workflow==='ALL'||ticket.workflow===filters.workflow;
+      const policyOk=filters.policy==='ALL'||ticket.policy===filters.policy;
+      const text=[ticket.id,ticket.workflow,ticket.policy,ticket.verdict,ticket.requester,ticket.user,ticket.bot,ticket.notes].join(' ').toLowerCase();
+      return workflowOk&&policyOk&&(!q||text.includes(q));
+    });
+    return this.wait(rows,260);
+  },
+  submit(payload){
+    const id='TKT-'+String(Math.max(...state.tickets.map(ticket=>Number(ticket.id.split('-')[1])),2400)+1);
+    const ticket={id,workflow:payload.workflow,policy:payload.policy,verdict:'Needs Edit',requester:payload.requester,job:payload.job,assignee:'Unassigned',sla:'59m left',status:'New',user:payload.user,bot:payload.bot,notes:payload.notes,timeline:[{label:'Submitted',detail:'Created from the static intake form inside demo.html.'},{label:'Mock sync',detail:'Stored in local memory instead of Google Sheets.'}]};
+    state.tickets.unshift(ticket);
+    return this.wait({success:true,ticket},520);
+  },
+  get(ticketId){return this.wait(state.tickets.find(item=>item.id===ticketId),220)},
+  save(ticketId,updates){
+    const ticket=state.tickets.find(item=>item.id===ticketId);
+    if(!ticket)return this.wait({success:false},180);
+    Object.assign(ticket,updates);
+    ticket.timeline=ticket.timeline.concat({label:'Evaluation saved',detail:'Verdict set to '+updates.verdict+' and stored locally in demo state.'});
+    return this.wait({success:true,ticket},420);
+  },
+  askJixy(query){
+    const q=query.trim().toLowerCase();
+    let response={summary:'Use the intake form to add a ticket, Evaluate to open the side-sheet, and filters to narrow the queue.',citations:['General KB • demo overview'],action:null};
+    if(!q)return this.wait(response,220);
+    if(q.includes('how')&&q.includes('work')){
+      response={summary:'This static build mirrors the original UX using local mock tickets, mock verdicts, and an in-memory queue. No Apps Script or Sheets backend is called.',citations:['General KB • demo architecture'],action:null};
+    } else if(q.includes('wf-demo-01')){
+      response={summary:'WF-DEMO-01 is the main mock workflow. I filtered the queue to show that workflow and surfaced its checklist guidance.',citations:['General KB • WF-DEMO-01 launch checklist'],action:{type:'filter',workflow:'WF-DEMO-01',policy:'ALL'}};
+    } else if(q.includes('policy category b')||q.includes('promotional')){
+      response={summary:'Policy Category B covers higher-risk or promotional language. Require evidence, add QA notes, and escalate when disclaimers are missing.',citations:['Playbook • Policy Category B escalation rules'],action:{type:'filter',workflow:'ALL',policy:'Policy Category B'}};
+    } else if(q.includes('approved')||q.includes('category a')){
+      response={summary:'Policy Category A is usually a quicker path. Validate tone and citations, then approve if the response stays within safe support language.',citations:['Process KB • Policy Category A quick path'],action:{type:'filter',workflow:'ALL',policy:'Policy Category A'}};
+    } else if(q.includes('escalat')){
+      const escalated=state.tickets.filter(ticket=>ticket.verdict==='Escalate'||ticket.verdict==='QA Escalated').length;
+      response={summary:'There are currently '+escalated+' escalated tickets in the mock queue. Open one with Evaluate to inspect the side-sheet timeline.',citations:['Live queue • mock escalation count'],action:null};
+    }
+    return this.wait(response,620);
+  }
+};
+const els = {
+  stats:document.getElementById('stats'),workflowFilter:document.getElementById('workflowFilter'),policyFilter:document.getElementById('policyFilter'),tableSearch:document.getElementById('tableSearch'),tableBody:document.getElementById('tableBody'),emptyState:document.getElementById('emptyState'),queueCount:document.getElementById('queueCount'),kbGrid:document.getElementById('kbGrid'),ticketForm:document.getElementById('ticketForm'),workflowInput:document.getElementById('workflowInput'),policyInput:document.getElementById('policyInput'),seedBtn:document.getElementById('seedBtn'),resetBtn:document.getElementById('resetBtn'),drawer:document.getElementById('drawer'),backdrop:document.getElementById('backdrop'),closeDrawer:document.getElementById('closeDrawer'),drawerTitle:document.getElementById('drawerTitle'),infoGrid:document.getElementById('infoGrid'),sheetPrompt:document.getElementById('sheetPrompt'),sheetReply:document.getElementById('sheetReply'),sheetVerdict:document.getElementById('sheetVerdict'),sheetOwner:document.getElementById('sheetOwner'),sheetNotes:document.getElementById('sheetNotes'),timeline:document.getElementById('timeline'),saveEval:document.getElementById('saveEval'),escalate:document.getElementById('escalate'),chatWindow:document.getElementById('chatWindow'),toggleAi:document.getElementById('toggleAi'),closeAi:document.getElementById('closeAi'),chatBody:document.getElementById('chatBody'),chips:document.getElementById('chips'),aiInput:document.getElementById('aiInput'),sendAi:document.getElementById('sendAi'),toasts:document.getElementById('toasts')
+};
+function verdictClass(verdict){if(verdict==='Approved')return 'success';if(verdict==='Needs Edit')return 'warning';if(verdict==='Escalate'||verdict==='QA Escalated')return 'danger-badge';return 'neutral'}
+function toast(title,body){const node=document.createElement('div');node.className='toast';node.innerHTML=`<strong>${title}</strong><small>${body}</small>`;els.toasts.appendChild(node);setTimeout(()=>node.remove(),3200)}
+function fillSelect(select,values,includeAll){select.innerHTML=values.filter(value=>includeAll||value!=='ALL').map(value=>`<option value='${value}'>${value}</option>`).join('')}
+function renderStats(rows){const open=rows.filter(ticket=>ticket.status!=='Closed').length;const wfDemo=rows.filter(ticket=>ticket.workflow==='WF-DEMO-01').length;const coverage=rows.length?Math.round((rows.filter(ticket=>ticket.assignee!=='Unassigned').length/rows.length)*100):0;const cards=[['Visible tickets',String(rows.length),'Current queue after filters'],['Open reviews',String(open),'Active items still moving through QA'],['WF-DEMO-01',String(wfDemo),'Primary mock workflow volume'],['Assigned coverage',coverage+'%','Tickets already owned by an analyst']];els.stats.innerHTML=cards.map(card=>`<div class='card stat'><div class='stat-label'>${card[0]}</div><div class='stat-value'>${card[1]}</div><div class='stat-sub'>${card[2]}</div></div>`).join('')}
+function renderKb(items){els.kbGrid.innerHTML=items.map(item=>`<div class='kb-item'><h4>${item.title}</h4><p>${item.summary}</p><div class='small-list'><span class='badge workflow'>${item.channel}</span>${item.triggers.map(trigger=>`<span class='badge neutral'>${trigger}</span>`).join('')}</div></div>`).join('')}
+function renderQueue(rows){els.queueCount.textContent=rows.length+' visible';els.emptyState.classList.toggle('hidden',rows.length>0);els.tableBody.innerHTML=rows.map(ticket=>`<tr><td><div class='ticket'>${ticket.id}</div><div class='muted'>${ticket.requester} • ${ticket.job}</div></td><td><span class='badge workflow'>${ticket.workflow}</span></td><td><span class='badge policy'>${ticket.policy}</span></td><td><span class='badge ${verdictClass(ticket.verdict)}'>${ticket.verdict}</span></td><td>${ticket.assignee}<div class='muted'>${ticket.status}</div></td><td>${ticket.sla}</td><td><button class='btn secondary' type='button' data-open-ticket='${ticket.id}'>Evaluate</button></td></tr>`).join('')}
+async function refreshQueue(){const rows=await mockServer.fetch(state.filters);renderQueue(rows);renderStats(rows)}
+async function openDrawer(ticketId){state.selected=ticketId;const ticket=await mockServer.get(ticketId);if(!ticket)return;els.drawerTitle.textContent=ticket.id+' • '+ticket.requester;els.infoGrid.innerHTML=[['Workflow',ticket.workflow],['Policy',ticket.policy],['Status',ticket.status],['SLA',ticket.sla],['Requester',ticket.requester],['Queue',ticket.job]].map(item=>`<div class='info-box'><span>${item[0]}</span><strong>${item[1]}</strong></div>`).join('');els.sheetPrompt.value=ticket.user;els.sheetReply.value=ticket.bot;fillSelect(els.sheetVerdict,mockData.qaVerdicts,false);els.sheetVerdict.value=ticket.verdict;els.sheetOwner.value=ticket.assignee;els.sheetNotes.value=ticket.notes;els.timeline.innerHTML=ticket.timeline.map(item=>`<div class='timeline-item'><strong>${item.label}</strong><div class='muted'>${item.detail}</div></div>`).join('');els.drawer.classList.add('open');els.backdrop.classList.add('open')}
+function closeDrawer(){els.drawer.classList.remove('open');els.backdrop.classList.remove('open')}
+async function saveEvaluation(forceEscalated){if(!state.selected)return;const verdict=forceEscalated?'QA Escalated':els.sheetVerdict.value;const updates={verdict,assignee:els.sheetOwner.value.trim()||'Unassigned',notes:els.sheetNotes.value.trim(),status:verdict==='Approved'?'Closed':(verdict.includes('Escalat')?'Escalated':'In Review')};const response=await mockServer.save(state.selected,updates);if(response.success){toast('Evaluation saved',response.ticket.id+' updated locally with '+response.ticket.verdict+'.');await refreshQueue();await openDrawer(state.selected)}}
+function loadSample(){const sample=mockData.samples[state.sampleIndex%mockData.samples.length];state.sampleIndex+=1;document.getElementById('requester').value=sample.requester;document.getElementById('job').value=sample.job;els.workflowInput.value=sample.workflow;els.policyInput.value=sample.policy;document.getElementById('userPrompt').value=sample.user;document.getElementById('botReply').value=sample.bot;document.getElementById('notes').value=sample.notes;toast('Sample loaded','Another realistic mock intake is ready to submit.')}
+function addChat(text,role,isHtml){const msg=document.createElement('div');msg.className='msg '+role;if(isHtml){msg.innerHTML=text}else{msg.textContent=text}els.chatBody.appendChild(msg);els.chatBody.scrollTop=els.chatBody.scrollHeight;return msg}
+async function runAi(query){if(!query.trim())return;addChat(query,'user',false);els.aiInput.value='';const loading=addChat(`<span class='loader'><span class='dot-loader'></span><span class='dot-loader'></span><span class='dot-loader'></span></span>`,'bot',true);const result=await mockServer.askJixy(query);loading.remove();if(result.action&&result.action.type==='filter'){state.filters.workflow=result.action.workflow;state.filters.policy=result.action.policy;els.workflowFilter.value=result.action.workflow;els.policyFilter.value=result.action.policy;await refreshQueue()}addChat(result.summary+' Source: '+result.citations.join(' • '),'bot',false)}
+async function init(){const payload=await mockServer.load();fillSelect(els.workflowFilter,payload.workflows,true);fillSelect(els.policyFilter,payload.policies,true);fillSelect(els.workflowInput,payload.workflows,false);fillSelect(els.policyInput,payload.policies,false);fillSelect(els.sheetVerdict,payload.verdicts,false);els.workflowFilter.value=state.filters.workflow;els.policyFilter.value=state.filters.policy;els.workflowInput.value='WF-DEMO-01';els.policyInput.value='Policy Category A';renderKb(payload.kb);await refreshQueue()}
+els.workflowFilter.addEventListener('change',async event=>{state.filters.workflow=event.target.value;await refreshQueue()});
+els.policyFilter.addEventListener('change',async event=>{state.filters.policy=event.target.value;await refreshQueue()});
+els.tableSearch.addEventListener('input',async event=>{state.filters.query=event.target.value;await refreshQueue()});
+els.resetBtn.addEventListener('click',async ()=>{state.filters={workflow:'ALL',policy:'ALL',query:''};els.workflowFilter.value='ALL';els.policyFilter.value='ALL';els.tableSearch.value='';await refreshQueue();toast('Filters cleared','Queue reset to the full mock dataset.')});
+els.seedBtn.addEventListener('click',loadSample);
+els.ticketForm.addEventListener('submit',async event=>{event.preventDefault();const payload={requester:document.getElementById('requester').value.trim(),job:document.getElementById('job').value.trim(),workflow:els.workflowInput.value,policy:els.policyInput.value,user:document.getElementById('userPrompt').value.trim(),bot:document.getElementById('botReply').value.trim(),notes:document.getElementById('notes').value.trim()};const result=await mockServer.submit(payload);toast('Mock entry submitted',result.ticket.id+' was added to the local queue.');state.filters.workflow='ALL';state.filters.policy='ALL';els.workflowFilter.value='ALL';els.policyFilter.value='ALL';await refreshQueue();await openDrawer(result.ticket.id)});
+els.tableBody.addEventListener('click',event=>{const button=event.target.closest('[data-open-ticket]');if(button)openDrawer(button.getAttribute('data-open-ticket'))});
+els.closeDrawer.addEventListener('click',closeDrawer);els.backdrop.addEventListener('click',closeDrawer);els.saveEval.addEventListener('click',()=>saveEvaluation(false));els.escalate.addEventListener('click',()=>saveEvaluation(true));
+els.toggleAi.addEventListener('click',()=>els.chatWindow.classList.toggle('open'));els.closeAi.addEventListener('click',()=>els.chatWindow.classList.remove('open'));els.sendAi.addEventListener('click',()=>runAi(els.aiInput.value));els.aiInput.addEventListener('keydown',event=>{if(event.key==='Enter')runAi(els.aiInput.value)});els.chips.addEventListener('click',event=>{const chip=event.target.closest('[data-query]');if(chip)runAi(chip.getAttribute('data-query'))});
+init();
+</script>
+</body>
+</html>

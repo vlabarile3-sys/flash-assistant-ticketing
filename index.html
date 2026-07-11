@@ -1,23 +1,47 @@
 <!doctype html>
-<html lang="en">
+<html lang='en'>
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Flash Assistant Ticketing - Demo</title>
-  <style>body{font-family:Arial,sans-serif;max-width:800px;margin:40px auto;padding:0 16px;line-height:1.5}code{background:#f4f4f4;padding:2px 6px;border-radius:4px}.box{border:1px solid #ddd;border-radius:10px;padding:16px}</style>
+  <meta charset='utf-8'>
+  <meta name='viewport' content='width=device-width,initial-scale=1'>
+  <title>Flash Assistant Ticketing - Live Demo</title>
+  <style>
+    body{font-family:Inter,Segoe UI,Arial,sans-serif;max-width:980px;margin:48px auto;padding:0 18px;line-height:1.6;background:#f6f8fc;color:#0f172a}
+    .hero{background:linear-gradient(135deg,#111827,#4f46e5);color:#fff;border-radius:28px;padding:36px;box-shadow:0 30px 70px rgba(15,23,42,.18)}
+    .hero h1{margin:0 0 10px;font-size:40px;letter-spacing:-.04em}
+    .hero p{max-width:720px;margin:0 0 22px;color:#dbeafe}
+    .cta{display:inline-block;background:#fff;color:#4338ca;padding:14px 22px;border-radius:999px;font-weight:800;text-decoration:none}
+    .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;margin-top:22px}
+    .card{background:#fff;border:1px solid #e2e8f0;border-radius:22px;padding:20px;box-shadow:0 15px 40px rgba(15,23,42,.06)}
+    code{background:#eef2ff;color:#4338ca;padding:3px 7px;border-radius:8px}
+    ul{padding-left:18px}
+    @media (max-width:700px){.grid{grid-template-columns:1fr}.hero{padding:24px}.hero h1{font-size:32px}}
+  </style>
 </head>
 <body>
-  <h1>Flash Assistant Ticketing (Mock Demo)</h1>
-  <div class="box">
-    <p>This is a sanitized public demo landing page for portfolio purposes.</p>
-    <p>Source modules:</p>
-    <ul>
-      <li><code>Code.gs</code></li>
-      <li><code>Index.html</code></li>
-      <li><code>CSS.html</code></li>
-      <li><code>JS.html</code></li>
-    </ul>
-    <p><a href="https://github.com/vlabarile3-sys/flash-assistant-ticketing" target="_blank" rel="noopener">Open repository</a></p>
-  </div>
+  <section class='hero'>
+    <h1>Flash Assistant Ticketing</h1>
+    <p>Portfolio-safe public landing page for the sanitized Google Apps Script ticketing experience. A new standalone demo is now available with local mock data, working ticket intake, side-sheet evaluation, and a Jixy AI search widget.</p>
+    <a class='cta' href='demo.html'>Open Live Interactive Demo</a>
+  </section>
+  <section class='grid'>
+    <div class='card'>
+      <h2>Included mock modules</h2>
+      <ul>
+        <li><code>Code.gs</code></li>
+        <li><code>Index.html</code></li>
+        <li><code>CSS.html</code></li>
+        <li><code>JS.html</code></li>
+        <li><code>demo.html</code> ← standalone static build</li>
+      </ul>
+    </div>
+    <div class='card'>
+      <h2>What works in the demo</h2>
+      <ul>
+        <li>Submit a new mock ticket into a local queue</li>
+        <li>Open the evaluation side-sheet and save a verdict</li>
+        <li>Use Jixy AI canned search to filter the queue</li>
+      </ul>
+    </div>
+  </section>
 </body>
 </html>
