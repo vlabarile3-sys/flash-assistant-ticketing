@@ -1,0 +1,582 @@
+﻿<!DOCTYPEÂ html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Demo Hub - <?= TEAM_CONTEXT ?> Workspace</title>
+<script>
+const APP_TEAMÂ = "<?= TEAM_CONTEXT ?>";
+</script>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22%23475569%22%3E%3Cpath%20d%3D%22M7%203.5l11%207.5-11%207.5v-4l6-3.5-6-3.5v-4z%22%2F%3E%3C%2Fsvg%3E">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,1,0" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@500;700&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+<?!= include('CSS'); ?>
+<style id="dynamic-col-styles"></style>
+</head>
+<body class="hide-scrollbar">
+
+<div class="toast-container" id="toastContainer"></div>
+<div id="taskBubble" class="task-bubble"></div>
+
+<div id="agentSideSheet" class="side-sheet-drawer" role="dialog" aria-labelledby="sideSheetTitle">
+<div class="side-sheet-header">
+<div class="d-flex align-items-center gap-2">
+<span class="material-icons text-muted">subtitles</span>
+<span id="sideSheetTitle" class="fw-bold font-display" style="letter-spacing:0.5px;">CASE INSPECTOR</span>
+</div>
+<button class="side-sheet-close-btn" onclick="closeAgentSideSheet()" aria-label="Close details">âœ• CLOSE</button>
+</div>
+<div class="side-sheet-body hide-scrollbar" id="agentSideSheetBody">
+</div>
+</div>
+
+<? if (TEAM_CONTEXT === 'AGENT') { ?>
+
+<div class="app-container agent-mode" id="mainAppContainer" style="z-index: 2; position: relative;">
+<div class="sidebar" id="appSidebar">
+<div class="brand" id="sidebarBrand">
+<svg viewBox="0 0 24 24" width="28" height="28" fill="var(--primary)"><path d="M7 3.5l11 7.5-11 7.5v-4l6-3.5-6-3.5v-4z" /></svg>
+<span id="brandTeamName" style="color: var(--text-main);">Demo Hub</span>
+</div>
+<div class="section-title">Knowledge Channels</div>
+<div class="dynamic-channels-container"></div>
+<div class="section-title mt-4">Resources</div>
+<div class="menu-item" onclick="switchView('suitcase', this)" id="menu-tutti">
+<i class="material-icons">grid_view</i> <span>Shared Materials</span>
+</div>
+<div id="dynamicCategories"></div>
+</div>
+
+<div class="main-content">
+<div id="view-alignments" class="view-section active agent-flex-view" style="height: 100%;">
+<div class="top-bar flex-shrink-0 flex-column align-items-stretch mb-4 pb-4 border-bottom" style="border-color: var(--border-glass) !important; gap: 15px;">
+<div class="d-flex align-items-center justify-content-between gap-3 w-100">
+<div class="d-flex align-items-center gap-3 flex-grow-1" style="min-width: 0;">
+<button class="top-action-btn flex-shrink-0" onclick="toggleSidebar()" title="Toggle Menu"><i class="material-icons">menu_open</i></button>
+<div id="agentChannelTitle" class="m-0 fw-bolder font-display flex-shrink-0 text-truncate" style="font-size: 1.4rem; letter-spacing: -0.5px; min-width: 180px; color: var(--primary);">GENERAL KB</div>
+<div class="search-box w-100" style="max-width: 400px;">
+<i class="material-icons">search</i>
+<input type="text" id="agentSearchInput" onkeyup="filterDigitalSlides()" placeholder="Search semantic content...">
+</div>
+</div>
+<div class="d-flex gap-2 align-items-center flex-shrink-0">
+<select id="agentVerdictDropdown" class="form-select glass-input m-0 rounded-pill" onchange="onVerdictFilterChange(this.value)" style="width: auto; padding: 10px 16px; font-weight: 700; color: var(--text-muted); cursor: pointer;" aria-label="Filter by Policy">
+<option value="ALL">âˆž All Policies</option>
+</select>
+
+<select id="agentWorkflowFilter" class="form-select glass-input m-0 rounded-pill" onchange="loadAgentAlignments()" style="width: auto; padding: 10px 16px; font-weight: 700; color: var(--primary); cursor: pointer;" aria-label="Select Workflow">
+<option value="WF-DEMO" selected>ðŸ›¡ï¸ WF-DEMO</option>
+<option value="ST/O18">ðŸ”ž ST/O18</option>
+<option value="NPOV">âš–ï¸ NPOV</option>
+<option value="Workspace/WS">ðŸ’¼ Workspace</option>
+<option value="OUF">âš ï¸ OUF</option>
+<option value="AI Mode">ðŸ¤– AI Mode</option>
+</select>
+<button class="btn btn-primary d-flex align-items-center gap-2 rounded-pill px-3" style="height: 44px;" onclick="loadAgentAlignments()" aria-label="Sync Data">
+<i class="material-icons" style="font-size:18px;">sync</i> <span class="d-none d-md-inline">Sync</span>
+</button>
+</div>
+</div>
+</div>
+<div id="digitalSlidesContainer" class="flex-grow-1 overflow-auto pe-2" style="padding-bottom: 60px !important;">
+<div id="archiveContainer" style="display:none;" class="w-100" style="max-width: 950px; margin: 0 auto;">
+<div class="accordion accordion-glass" id="monthlyAccordion"></div>
+</div>
+
+<div id="emptyGalleryState" class="text-center text-muted p-5 mt-5">
+<div class="spinner-border text-primary" role="status" id="alignmentLoader"></div>
+<div id="alignmentLoaderText" class="mt-3 font-code">Decrypting slides...</div>
+</div>
+</div>
+</div>
+
+<div id="view-suitcase" class="view-section">
+<div class="top-bar">
+<div class="d-flex align-items-center gap-3 w-100" style="max-width: 500px;">
+<button class="top-action-btn" onclick="toggleSidebar()" title="Toggle Menu"><i class="material-icons">menu_open</i></button>
+<div class="search-box flex-grow-1">
+<i class="material-icons">search</i>
+<input type="text" id="searchInput" onkeyup="searchFiles()" placeholder="Search shared files...">
+</div>
+</div>
+<div class="d-flex gap-3 align-items-center">
+<button class="top-action-btn" onclick="toggleViewMode()" id="btnViewToggle" title="Toggle View Mode"><i class="material-icons">view_list</i></button>
+</div>
+</div>
+<div class="d-flex justify-content-between align-items-end mb-2">
+<h2 id="categoryTitleSuitcase" class="m-0 fw-bolder" style="font-size: 2rem;">All Materials</h2>
+<span class="badge rounded-pill text-muted border px-3 py-2" id="itemCount" style="font-weight: 600; background: var(--input-bg); border-color: var(--border-glass) !important;">0 items</span>
+</div>
+<div class="grid-container" id="fileGrid"></div>
+</div>
+</div>
+</div>
+
+<? } else { ?>
+
+<div class="app-container" id="mainAppContainer" style="z-index: 2; position: relative;">
+<div class="sidebar" id="appSidebar">
+<div class="brand" id="sidebarBrand">
+<svg viewBox="0 0 24 24" width="28" height="28" fill="var(--primary)"><path d="M7 3.5l11 7.5-11 7.5v-4l6-3.5-6-3.5v-4z" /></svg>
+<span id="brandTeamName" style="color: var(--text-main);"><?= TEAM_CONTEXT ?> Hub</span>
+</div>
+<div class="section-title">Operations</div>
+<div class="menu-item active" onclick="switchView('welcome', this)" id="menu-welcome"><i class="material-icons">home</i> <span>Dashboard</span></div>
+<div class="menu-item" onclick="switchView('schedule', this)" id="menu-schedule"><i class="material-icons">calendar_month</i> <span>Master Schedule</span></div>
+<? if (TEAM_CONTEXT === 'QA') { ?>
+<div class="section-title">Demo Ecosystem</div>
+<div class="menu-item" onclick="switchView('forge', this)" id="menu-forge" style="color: var(--primary);"><i class="material-icons">architecture</i> <span>Demo Slide</span></div>
+<div class="section-title">Knowledge Channels</div>
+<div class="dynamic-channels-container"></div>
+<? } ?>
+
+<div class="section-title mt-4">Cloud Suitcase</div>
+<div class="menu-item" onclick="filterCategory('Tutti', this)" id="menu-tutti"><i class="material-icons">grid_view</i> <span>All Materials</span></div>
+<div id="dynamicCategories"></div>
+
+<? if (TEAM_CONTEXT === 'QA') { ?>
+<div class="menu-item settings-btn" onclick="openChannelManager()" style="margin-top: auto; margin-bottom: 6px;"><i class="material-icons">view_carousel</i> <span>Manage Channels</span></div>
+<? } ?>
+<div class="menu-item settings-btn" onclick="openTeamManager()"Â <? ifÂ (TEAM_CONTEXTÂ !== 'QA') { ?>Â style="margin-top: auto;" <? } ?> ><i class="material-icons">group_add</i> <span>Team Settings</span></div>
+</div>
+
+<div class="main-content">
+<div id="view-welcome" class="view-section active">
+<div class="top-bar">
+<div class="d-flex align-items-center gap-3"><button class="top-action-btn" onclick="toggleSidebar()" title="Toggle Menu"><i class="material-icons">menu_open</i></button></div>
+<div class="d-flex gap-3 align-items-center">
+<button class="top-action-btn" onclick="toggleTheme()" title="Toggle Theme"><i class="material-icons" id="themeIconWe">dark_mode</i></button>
+<button class="btn btn-success d-flex align-items-center gap-2 rounded-pill px-4" onclick="triggerCloudSync()"><i class="material-icons">cloud_sync</i> <span>Force Backup</span></button>
+</div>
+</div>
+<div class="d-flex flex-column justify-content-center align-items-center h-100 text-center" style="min-height: 60vh;">
+<svg viewBox="0 0 24 24" width="100" height="100" style="fill: var(--primary); margin-bottom: 30px;"><path d="M7 3.5l11 7.5-11 7.5v-4l6-3.5-6-3.5v-4z" /></svg>
+<h1 class="fw-bolder mb-3" style="font-size: 4rem; color: var(--primary); letter-spacing: -2px;" id="welcomeTitle">UniHub Core</h1>
+<p class="text-muted fs-5 mb-5" style="max-width: 600px;">Centralized architecture for Schedule management, Cloud storage, and knowledge publishing.</p>
+</div>
+</div>
+
+<div id="view-schedule" class="view-section">
+<div class="top-bar"><div class="d-flex align-items-center gap-3"><button class="top-action-btn" onclick="toggleSidebar()" title="Toggle Menu"><i class="material-icons">menu_open</i></button><div class="month-navigator"><button class="month-nav-btn" onclick="changeScheduleMonth(-1)" aria-label="Previous Month"><i class="material-icons">chevron_left</i></button><span id="currentScheduleMonthDisplay"></span><button class="month-nav-btn" onclick="changeScheduleMonth(1)" aria-label="Next Month"><i class="material-icons">chevron_right</i></button></div></div><div class="d-flex gap-3 align-items-center"><button class="btn forge-btn-ghost d-flex align-items-center gap-2" onclick="openTasksManager()"><i class="material-icons">format_list_bulleted_add</i> <span>Tasks</span></button><button class="btn btn-primary d-flex align-items-center gap-2 rounded-pill px-4" onclick="openPocModal()"><i class="material-icons">assignment_ind</i> <span>Assign</span></button></div></div>
+<div class="d-flex justify-content-between align-items-center mb-3"><h2 class="m-0 fw-bolder" style="font-size: 2.2rem;">Master Schedule</h2><button class="btn-auto-assign" onclick="autoAssignTasks()"><i class="material-icons">casino</i> <span>Auto-Assign</span></button></div>
+<div class="schedule-wrapper" id="pocGrid"></div>
+</div>
+
+<div id="view-suitcase" class="view-section">
+<div class="top-bar"><div class="d-flex align-items-center gap-3 w-100" style="max-width: 500px;"><button class="top-action-btn" onclick="toggleSidebar()" title="Toggle Menu"><i class="material-icons">menu_open</i></button><div class="search-box flex-grow-1"><i class="material-icons">search</i><input type="text" id="searchInput" onkeyup="searchFiles()" placeholder="Search resources..."></div></div><div class="d-flex gap-3 align-items-center"><button class="top-action-btn" onclick="toggleViewMode()" id="btnViewToggle" title="Toggle View Mode"><i class="material-icons">view_list</i></button><button class="btn forge-btn-ghost d-flex align-items-center gap-2" onclick="openCategoryManager()"><i class="material-icons">create_new_folder</i> <span>Folder</span></button><button class="btn btn-primary d-flex align-items-center gap-2 rounded-pill px-4" onclick="openFileModal()"><i class="material-icons">add</i> <span>New Item</span></button></div></div><div class="d-flex justify-content-between align-items-end mb-2"><h2 id="categoryTitle" class="m-0 fw-bolder" style="font-size: 2rem;">All Materials</h2><span class="badge rounded-pill text-muted border px-3 py-2" id="itemCount" style="font-weight: 600; background: var(--input-bg); border-color: var(--border-glass) !important;">0 items</span></div><div class="grid-container" id="fileGrid"></div>
+</div>
+
+<div id="view-alignments" class="view-section agent-flex-view" style="height: 100%;">
+<div class="top-bar flex-shrink-0 flex-column align-items-stretch mb-4 pb-4 border-bottom" style="border-color: var(--border-glass) !important; gap: 15px;">
+<div class="d-flex align-items-center justify-content-between gap-3 w-100">
+<div class="d-flex align-items-center gap-3 flex-grow-1" style="min-width: 0;">
+<button class="top-action-btn flex-shrink-0" onclick="toggleSidebar()" title="Toggle Menu"><i class="material-icons">menu_open</i></button>
+<div id="agentChannelTitle" class="m-0 fw-bolder font-display flex-shrink-0 text-truncate" style="font-size: 1.4rem; letter-spacing: -0.5px; min-width: 180px; color: var(--primary);">GENERAL KB</div>
+<div class="search-box w-100" style="max-width: 400px;">
+<i class="material-icons">search</i>
+<input type="text" id="agentSearchInput" onkeyup="filterDigitalSlides()" placeholder="Search semantic content...">
+</div>
+</div>
+<div class="d-flex gap-2 align-items-center flex-shrink-0">
+<select id="agentVerdictDropdown" class="form-select glass-input m-0 rounded-pill" onchange="onVerdictFilterChange(this.value)" style="width: auto; padding: 10px 16px; font-weight: 700; color: var(--text-muted); cursor: pointer;" aria-label="Filter by Policy">
+<option value="ALL">âˆž All Policies</option>
+</select>
+<select id="agentWorkflowFilter" class="form-select glass-input m-0 rounded-pill" onchange="loadAgentAlignments()" style="width: auto; padding: 10px 16px; font-weight: 700; color: var(--primary); cursor: pointer;" aria-label="Select Workflow">
+<option value="WF-DEMO" selected>ðŸ›¡ï¸ WF-DEMO</option>
+<option value="ST/O18">ðŸ”ž ST/O18</option>
+<option value="NPOV">âš–ï¸ NPOV</option>
+<option value="Workspace/WS">ðŸ’¼ Workspace</option>
+<option value="OUF">âš ï¸ OUF</option>
+<option value="AI Mode">ðŸ¤– AI Mode</option>
+</select>
+<button class="btn btn-primary d-flex align-items-center gap-2 rounded-pill px-3" style="height: 44px;" onclick="loadAgentAlignments()" aria-label="Sync Data">
+<i class="material-icons" style="font-size:18px;">sync</i> <span class="d-none d-md-inline">Sync</span>
+</button>
+</div>
+</div>
+</div>
+<div id="digitalSlidesContainer" class="flex-grow-1 overflow-auto pe-2" style="padding-bottom: 60px !important;">
+<div id="archiveContainer" style="display:none;" class="w-100" style="max-width: 950px; margin: 0 auto;">
+<div class="accordion accordion-glass" id="monthlyAccordion"></div>
+</div>
+<div id="emptyGalleryState" class="text-center text-muted p-5 mt-5">
+<div class="spinner-border text-primary" role="status" id="alignmentLoader"></div>
+<div id="alignmentLoaderText" class="mt-3 font-code">Decrypting slides...</div>
+</div>
+</div>
+</div>
+
+<? if (TEAM_CONTEXT === 'QA') { ?>
+<div id="view-forge" class="view-section" style="padding: 10px 20px; height: 100%; overflow: hidden;">
+<div class="d-flex flex-column h-100">
+<div class="top-bar mt-2 mb-4 flex-shrink-0">
+<div class="d-flex align-items-center gap-3">
+<button class="top-action-btn" onclick="toggleSidebar()" title="Toggle Menu"><i class="material-icons">menu_open</i></button>
+<h2 class="m-0 fw-bolder font-display" style="color: var(--primary); font-size: 1.8rem; letter-spacing: 0.5px;">Demo Slide</h2>
+</div>
+<div class="d-flex gap-3 align-items-center">
+<div class="search-box" style="width: 300px;">
+<i class="material-icons">search</i>
+<input type="text" id="globalSearch" onkeydown="handleSearch(event)" placeholder="Semantic Search...">
+</div>
+<select id="workflowFilter" class="form-select glass-input m-0 rounded-pill" onchange="onWorkflowFilterChange()" style="width:auto; padding: 10px 16px; font-weight: 700; color: var(--primary); cursor: pointer;" aria-label="Filter Workflow">
+<option value="ALL">ðŸŒ All Workflows</option>
+<option value="WF-DEMO" selected>ðŸ›¡ï¸ WF-DEMO</option>
+<option value="ST/O18">ðŸ”ž ST/O18</option>
+<option value="NPOV">âš–ï¸ NPOV</option>
+<option value="Workspace/WS">ðŸ’¼ Workspace</option>
+<option value="OUF">âš ï¸ OUF</option>
+</select>
+<button class="settings-btn rotate flex-shrink-0" onclick="openSettings()" title="Database Settings">
+<i class="material-icons" style="font-size: 22px;">storage</i>
+</button>
+</div>
+</div>
+
+<div class="forge-bento-container flex-grow-1">
+<div class="forge-card overflow-auto">
+<h6 class="fw-bold mb-3 text-primary"><i class="material-icons align-middle me-1" style="font-size: 18px;">link</i>Â Source Integration</h6>
+<div class="d-flex gap-2 mb-4">
+<input type="text" id="sourceId" class="glass-input m-0" value='MOCK_ID_VALUE' placeholder="Google Sheet URL" aria-label="Spreadsheet URL">
+<button id="btnConnectSync" class="forge-btn forge-btn-primary flex-shrink-0" onclick="connectSheet()" aria-label="Connect Spreadsheet">
+<i class="material-icons">sync</i>
+</button>
+</div>
+<div id="configArea" style="display:none;">
+<label>Worksheet</label>
+<select id="tabSelect" class="form-select glass-input mb-3" onchange="onTabChange(true)" aria-label="Select Sheet"></select>
+<div class="row g-2 mb-4">
+<div class="col-8"><label>Header Row</label><input type="number" id="headerRow" class="glass-input m-0" value="1" min="1" onchange="onHeaderRowChange()" aria-label="Header Row Number"></div>
+<div class="col-4 d-flex align-items-end"><button id="btnRefetch" class="forge-btn forge-btn-ghost w-100" onclick="fetchHeaders(true)">Refetch</button></div>
+</div>
+<hr class="border-secondary opacity-25 my-4">
+<h6 class="fw-bold mb-3 text-primary"><i class="material-icons align-middle me-1" style="font-size: 18px;">account_tree</i>Â Data Mapping</h6>
+<div class="row g-3">
+<div class="col-6"><label>User Prompt</label><select class="form-select glass-input m-0 col-map" data-field="user" onchange="onMappingChange()"></select></div>
+<div class="col-6"><label>Bot Output</label><select class="form-select glass-input m-0 col-map" data-field="bot" onchange="onMappingChange()"></select></div>
+<div class="col-6"><label>Explanation</label><select class="form-select glass-input m-0 col-map" data-field="explanation" onchange="onMappingChange()"></select></div>
+<div class="col-6"><label>Additional Notes</label><select class="form-select glass-input m-0 col-map" data-field="description" onchange="onMappingChange()"></select></div>
+</div>
+</div>
+</div>
+
+<div class="forge-card p-0" style="display: flex; flex-direction: column;">
+<div class="p-3 border-bottom opacity-75 d-flex justify-content-between align-items-center flex-shrink-0" style="border-color: var(--border-glass) !important;">
+<div class="fw-bold text-primary" style="letter-spacing: 1px;"><i class="material-icons align-middle me-1">table_chart</i>Â LIVE DATA PREVIEW</div>
+<div class="d-flex align-items-center gap-3">
+<span id="pageInfo" class="small text-muted font-code fw-bold">Page 1 of 1</span>
+<div class="d-flex gap-2">
+<button class="forge-btn forge-btn-ghost px-2 py-1" style="font-size:0.75rem;" onclick="changePage(-1)">PREV</button>
+<button class="forge-btn forge-btn-ghost px-2 py-1" style="font-size:0.75rem;" onclick="changePage(1)">NEXT</button>
+<button class="forge-btn forge-btn-ghost px-2 py-1" style="font-size:0.75rem;" onclick="forceRefresh()"><i class="material-icons" style="font-size: 14px;">refresh</i></button>
+</div>
+</div>
+</div>
+<div class="table-scroll flex-grow-1" style="border: none; border-radius: 0 0 24px 24px;">
+<table id="mainTable" class="schedule-table forge-data-table fixed-layout m-0 border-0">
+<thead id="tHead"><tr><th>Waiting for connection...</th></tr></thead>
+<tbody id="tBody"></tbody>
+</table>
+</div>
+</div>
+
+<div class="forge-card d-flex flex-column">
+<div class="d-flex justify-content-between align-items-center mb-3 flex-shrink-0">
+<h6 class="fw-bold m-0 text-primary"><i class="material-icons align-middle me-1" style="font-size: 18px;">send</i>Â Publish Target</h6>
+<select id="targetChannel" class="form-select glass-input m-0 rounded-pill" style="width: auto; padding: 6px 14px; height: 36px; font-weight: 700; color: var(--primary); font-size: 0.85rem;" onchange="forceRefresh()" aria-label="Publish Target Channel">
+<option value="General KB" selected>ðŸŸ¢ General KB</option>
+</select>
+</div>
+<div class="d-flex gap-2 mb-3 flex-shrink-0">
+<div class="flex-grow-1"><input type="text" id="rowDisp" class="glass-input m-0 text-center fw-bold text-primary rounded-pill" readonly value="MANUAL ENTRY"></div>
+<div class="flex-grow-1"><input type="date" id="slideDate" class="glass-input m-0 rounded-pill" aria-label="Slide Date"></div>
+</div>
+<div id="cartView" style="display:none; flex-grow:1; overflow-y:auto; margin-bottom:15px; border:1px solid var(--border-glass); border-radius:12px; padding:10px; background:var(--input-bg);">
+<label class="sticky-top bg-transparent pb-2 mb-2 border-bottom opacity-50" style="border-color: var(--border-glass) !important;">Staged Slides Queue</label>
+<div id="cartList"></div>
+</div>
+<div id="editInputs" class="flex-grow-1 overflow-auto pe-1">
+<label>User Prompt Context</label><textarea id="val-user" class="glass-input preview-box"></textarea>
+<label>Model Bot Response</label><textarea id="val-bot" class="glass-input preview-box"></textarea>
+<label>QA Alignment Verdict</label><textarea id="val-explanation" class="glass-input preview-box"></textarea>
+<label>Logic & Explanation Notes</label><textarea id="val-description" class="glass-input preview-box mb-0"></textarea>
+</div>
+<div class="mt-3 pt-3 border-top opacity-75 flex-shrink-0" style="border-color: var(--border-glass) !important;">
+<div id="actionButtonsNormal" class="d-flex gap-2 mb-2">
+<button id="addManualBtn" class="forge-btn forge-btn-ghost flex-grow-1" onclick="addCurrentToBatch()">+ BATCH STAGE</button>
+<button id="clearBtn" class="forge-btn forge-btn-ghost text-danger border-danger" style="display:none;" onclick="clearCart()">CLEAR ALL</button>
+<button id="genBtn" class="forge-btn forge-btn-success flex-grow-1 fw-bold fs-6" onclick="publishToAgents()"><i class="material-icons" style="font-size:20px;">rocket_launch</i>Â PUBLISH LIVE</button>
+</div>
+<div id="actionButtonsEdit" class="d-flex gap-2 mb-2" style="display:none !important;">
+<button class="forge-btn forge-btn-ghost flex-grow-1" onclick="cancelCartItemEdit()">CANCEL</button>
+<button class="forge-btn forge-btn-primary flex-grow-2" onclick="saveCartItemEdit()">SAVE CHANGES</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<? } ?>
+</div>
+</div>
+<? } ?>
+
+<div class="modal fade" id="pocModal" tabindex="-1">
+<div class="modal-dialog modal-dialog-centered">
+<div class="modal-content modal-glass shadow-lg">
+<div class="modal-header">
+<h5 class="modal-title fw-bold" id="pocModalTitle" style="color: var(--primary);">Plan Assignment</h5>
+<button type="button" class="btn-close" style="filter: var(--close-filter, none);" data-bs-dismiss="modal" aria-label="Close"></button>
+</div>
+<div class="modal-body">
+<form id="pocForm" onsubmit="event.preventDefault(); savePoc();">
+<input type="hidden" id="pocId">
+<div class="mb-4">
+<label class="form-label text-muted small fw-bold text-uppercase">Task / Role</label>
+<select class="form-select glass-input" id="pocTask" required></select>
+</div>
+<div class="mb-4">
+<label class="form-label text-muted small fw-bold text-uppercase">POC Name</label>
+<input type="text" class="form-control glass-input" id="pocName" required list="qaNamesDatalist">
+<datalist id="qaNamesDatalist"></datalist>
+</div>
+<div class="mb-2">
+<label class="form-label text-muted small fw-bold text-uppercase">Month</label>
+<input type="month" class="form-control glass-input" id="pocMonth" required>
+</div>
+<div class="modal-footer px-0 pb-0 pt-4 mt-3">
+<button type="button" class="btn forge-btn-ghost rounded-pill px-4" data-bs-dismiss="modal">Cancel</button>
+<button type="submit" class="btn btn-primary rounded-pill px-4">Save Assignment</button>
+</div>
+</form>
+</div>
+</div>
+</div>
+</div>
+
+<div class="modal fade" id="fileModal" tabindex="-1">
+<div class="modal-dialog modal-dialog-centered modal-lg">
+<div class="modal-content modal-glass shadow-lg">
+<div class="modal-header border-bottom-0 pb-0">
+<h5 class="modal-title fw-bold d-flex align-items-center gap-2" id="fileModalTitle" style="color: var(--primary);">
+<i class="material-icons">smart_toy</i>Â New Resource / Jixy Memory
+</h5>
+<button type="button" class="btn-close" style="filter: var(--close-filter, none);" data-bs-dismiss="modal" aria-label="Close"></button>
+</div>
+<div class="modal-body pt-4">
+<form id="fileForm" onsubmit="event.preventDefault(); saveDocument();">
+<input type="hidden" id="docId">
+<div class="row g-4 mb-4">
+<div class="col-md-12">
+<label class="form-label text-muted small fw-bold text-uppercase d-flex align-items-center gap-1"><i class="material-icons" style="font-size:16px">title</i>Â Title (Memory Name)</label>
+<input type="text" class="form-control glass-input m-0" id="docTitle" required placeholder="e.g. WF-DEMO Policy Guidelines 2026">
+</div>
+<div class="col-md-12">
+<label class="form-label text-muted small fw-bold text-uppercase d-flex align-items-center gap-1"><i class="material-icons" style="font-size:16px">link</i>Â URL Link</label>
+<input type="url" class="form-control glass-input m-0" id="docUrl" required placeholder="https://example.com/resource">
+</div>
+<div class="col-md-6">
+<label class="form-label text-muted small fw-bold text-uppercase d-flex align-items-center gap-1"><i class="material-icons" style="font-size:16px">folder</i>Â Category</label>
+<select class="form-select glass-input m-0" id="docCategory"></select>
+</div>
+<div class="col-md-6">
+<label class="form-label text-muted small fw-bold text-uppercase d-flex align-items-center gap-1"><i class="material-icons" style="font-size:16px">description</i>Â Type</label>
+<select class="form-select glass-input m-0" id="docType">
+<option value="sheet">Sheets</option>
+<option value="doc">Docs</option>
+<option value="pdf">PDF</option>
+<option value="link">Link</option>
+</select>
+</div>
+</div>
+
+<div class="mb-4 d-flex align-items-start gap-3 p-3 border rounded" style="border-color: rgba(var(--primary-rgb), 0.3) !important; background: rgba(var(--primary-rgb), 0.05); border-radius: 16px;">
+<div class="mt-1">
+<input type="checkbox" class="neon-checkbox" id="docAgentVisible">
+</div>
+<div>
+<label class="m-0 fw-bold text-primary" style="font-size: 0.9rem; text-transform: none; letter-spacing: 0; cursor: pointer;" for="docAgentVisible">ðŸ‘ï¸ / ðŸ§  Sync to Demo Hub & Jixy AI</label>
+<div class="small text-muted mt-1" style="font-size: 0.8rem; line-height: 1.4;">If enabled, Jixy AI will index this file to answer Agent queries, and it will be visible in their Suitcase.</div>
+</div>
+</div>
+
+<div class="row g-4 mb-2">
+<div class="col-md-6">
+<label class="form-label text-muted small fw-bold text-uppercase d-flex align-items-center gap-1"><i class="material-icons" style="font-size:16px">label</i>Â Tags (Press Enter)</label>
+<div class="token-container" onclick="document.getElementById('docTagsInput').focus()">
+<div id="tagsTokenList" class="d-flex flex-wrap gap-1"></div>
+<input type="text" class="token-input" id="docTagsInput" placeholder="e.g. policy..." onkeydown="handleTokenKeydown(event, 'tags')">
+</div>
+</div>
+<div class="col-md-6">
+<label class="form-label text-primary small fw-bold text-uppercase d-flex align-items-center gap-1"><i class="material-icons" style="font-size:16px">psychology</i>Â Jixy Search Triggers</label>
+<div class="token-container" style="border-color: var(--primary); background: rgba(var(--primary-rgb), 0.02);" onclick="document.getElementById('docKeywordsInput').focus()">
+<div id="kwTokenList" class="d-flex flex-wrap gap-1"></div>
+<input type="text" class="token-input" id="docKeywordsInput" placeholder="e.g. how to handle..." onkeydown="handleTokenKeydown(event, 'kw')">
+</div>
+</div>
+</div>
+
+<div class="modal-footer px-0 pb-0 pt-4 mt-4 border-top" style="border-color: var(--border-glass) !important;">
+<button type="button" class="btn forge-btn-ghost rounded-pill px-4" data-bs-dismiss="modal">Cancel</button>
+<button type="submit" class="btn btn-primary rounded-pill px-5 d-flex align-items-center gap-2"><i class="material-icons" style="font-size:18px;">save</i>Â Save Resource</button>
+</div>
+</form>
+</div>
+</div>
+</div>
+</div>
+
+<div class="modal fade" id="categoryModal" tabindex="-1">
+<div class="modal-dialog modal-dialog-centered">
+<div class="modal-content modal-glass shadow-lg">
+<div class="modal-header pb-3 border-bottom border-secondary">
+<h6 class="modal-title fw-bold d-flex align-items-center gap-2 text-primary">Manage Settings</h6>
+<button type="button" class="btn-close" style="filter: var(--close-filter, none);" data-bs-dismiss="modal" aria-label="Close"></button>
+</div>
+<div class="modal-body pt-3 row">
+<div class="col-md-12 mb-3" id="channelSectionModal" style="display:none;">
+<div class="text-muted small fw-bold mb-2 text-uppercase">Manage Knowledge Channels</div>
+<div class="d-flex align-items-stretch gap-2 mb-3">
+<input type="text" id="newChannelInput" class="form-control glass-input m-0" placeholder="New channel name..." onkeypress="if(event.key === 'Enter') addChannel()">
+<button class="btn btn-primary d-flex align-items-center justify-content-center m-0" style="width:48px; padding:0; border-radius:12px;" onclick="addChannel()"><i class="material-icons">add</i></button>
+</div>
+<div id="channelListContainer" style="max-height: 250px; overflow-y: auto;"></div>
+</div>
+
+<div class="col-md-12 mb-3" id="folderSectionModal" style="display:none;">
+<div class="text-muted small fw-bold mb-2 text-uppercase">Manage Folders</div>
+<div class="d-flex align-items-stretch gap-2 mb-3">
+<input type="text" id="newCategoryInput" class="form-control glass-input m-0" placeholder="New folder name..." onkeypress="if(event.key === 'Enter') addCategory()">
+<button class="btn btn-primary d-flex align-items-center justify-content-center m-0" style="width:48px; padding:0; border-radius:12px;" onclick="addCategory()"><i class="material-icons">add</i></button>
+</div>
+<div id="categoryListContainer" style="max-height: 250px; overflow-y: auto;"></div>
+</div>
+
+<div class="col-md-12 mb-3" id="teamSectionModal" style="display:none;">
+<div class="text-muted small fw-bold mb-2 text-uppercase">Team Members (POCs)</div>
+<div class="d-flex align-items-stretch gap-2 mb-3">
+<input type="text" id="newQaInput" class="form-control glass-input m-0" placeholder="Member name..." onkeypress="if(event.key === 'Enter') addQaName()">
+<button class="btn btn-primary d-flex align-items-center justify-content-center m-0" style="width:48px; padding:0; border-radius:12px;" onclick="addQaName()"><i class="material-icons">add</i></button>
+</div>
+<div id="qaListContainer" style="max-height: 250px; overflow-y: auto;"></div>
+</div>
+
+<div class="col-md-12 mb-3" id="taskSectionModal" style="display:none;">
+<div class="text-muted small fw-bold mb-2 text-uppercase">Manage Tasks</div>
+<div class="d-flex align-items-stretch gap-2 mb-3">
+<input type="text" id="newTaskInput" class="form-control glass-input m-0" placeholder="New task..." onkeypress="if(event.key === 'Enter') addAppTask()">
+<button class="btn btn-primary d-flex align-items-center justify-content-center m-0" style="width:48px; padding:0; border-radius:12px;" onclick="addAppTask()"><i class="material-icons">add</i></button>
+</div>
+<div id="taskListContainer" style="max-height: 250px; overflow-y: auto;"></div>
+</div>
+
+</div>
+</div>
+</div>
+</div>
+
+<div id="inspectorModal" class="modal-overlay">
+<div class="modal-box">
+<div class="modal-header">
+<div style="font-weight:700; color:var(--primary); letter-spacing:1px; padding:20px 30px;">DATA INSPECTOR</div>
+<div style="cursor:pointer; padding:20px 30px; border-left:1px solid var(--border-glass);" onclick="closeModal('inspectorModal')">âœ• ESC</div>
+</div>
+<div id="inspectorContent" class="modal-content overflow-auto" style="padding: 20px 30px;"></div>
+<div style="padding:20px; display:flex; justify-content:flex-end; gap:10px; border-top:1px solid var(--border-glass);">
+<button class="forge-btn forge-btn-ghost" style="width:auto" onclick="copyModalContent()">Copy Text</button>
+<button class="forge-btn forge-btn-primary" style="width:auto" onclick="closeModal('inspectorModal')">Close</button>
+</div>
+</div>
+</div>
+
+<div class="modal fade" id="bugPreviewModal" tabindex="-1">
+<div class="modal-dialog modal-dialog-centered modal-xl modal-dialog-scrollable">
+<div class="modal-content modal-glass shadow-lg" style="border: 1px solid var(--primary); background: var(--bg-base); max-height: 90vh;">
+<div class="modal-header border-bottom border-secondary d-flex align-items-center gap-3 pb-3" style="background: var(--surface-glass);">
+<h4 class="modal-title fw-bolder text-primary mb-0 d-flex align-items-center gap-2" id="bugPreviewTitle">
+<i class="material-icons">bug_report</i>Â BUG: <span id="previewBugId"></span>
+</h4>
+<a id="previewBugLink" href="#" target="_blank" class="btn btn-sm btn-primary rounded-pill px-3 fw-bold d-flex align-items-center gap-1 ms-auto">
+Open in Tracker <i class="material-icons" style="font-size:16px;">open_in_new</i>
+</a>
+<button type="button" class="btn-close ms-2" style="filter: var(--close-filter, none);" data-bs-dismiss="modal" aria-label="Close"></button>
+</div>
+<div class="modal-body p-4 hide-scrollbar" style="background: transparent;">
+<div class="mb-4">
+<h5 id="previewBugSubject" class="fw-bold mb-2 text-main" style="line-height: 1.4;">Bug Subject</h5>
+<div class="d-flex gap-3 text-muted small fw-bold font-code align-items-center">
+<span id="previewBugDate"><i class="material-icons" style="font-size:14px; vertical-align:middle; opacity:0.7;">calendar_today</i>Â Date</span>
+<span class="badge" id="previewBugWorkflow" style="background: rgba(var(--primary-rgb), 0.1); color: var(--primary); border: 1px solid rgba(var(--primary-rgb), 0.3);">Workflow</span>
+</div>
+</div>
+
+<div id="previewGlobalDecision" class="mb-4" style="display:none;"></div>
+<div class="d-flex align-items-center gap-2 mb-3 mt-2">
+<i class="material-icons text-primary">folder_special</i>
+<h6 class="fw-bold m-0 text-uppercase text-muted" style="letter-spacing:1px;">Scenarios & Cases Analysis</h6>
+</div>
+<div id="previewBugTimeline" class="bento-cases-grid">
+</div>
+</div>
+</div>
+</div>
+</div>
+
+<div class="modal fade" id="slideExpandModal" tabindex="-1">
+<div class="modal-dialog modal-dialog-centered modal-xl modal-dialog-scrollable">
+<div class="modal-content modal-glass shadow-lg" style="border: 1px solid var(--primary); background: var(--bg-base); max-height: 90vh;">
+<div class="modal-header border-bottom border-secondary d-flex align-items-center pb-3" style="background: var(--surface-glass);">
+<h5 class="modal-title fw-bolder text-primary mb-0 d-flex align-items-center gap-2">
+<i class="material-icons">preview</i>Â Demo FOCUS MODE
+</h5>
+<button type="button" class="btn-close ms-auto" style="filter: var(--close-filter, none);" data-bs-dismiss="modal" aria-label="Close"></button>
+</div>
+<div class="modal-body p-4 hide-scrollbar" id="slideExpandModalBody" style="background: transparent;">
+</div>
+</div>
+</div>
+</div>
+
+<div id="ai-widget-container">
+<div id="ai-chat-window" class="ai-hidden">
+<div class="ai-header">
+<div class="ai-title"><i class="material-icons" style="color:var(--primary);">psychology_alt</i>Jixy AI</div>
+<button class="btn btn-sm btn-icon btn-ghost rounded-circle" style="padding:5px; border:none;" onclick="toggleAI()"><i class="material-icons">close</i></button>
+</div>
+<div class="ai-body hide-scrollbar" id="ai-messages">
+<div class="msg msg-bot" id="ai-greeting">ðŸ‘‹ Hi! I'm <b>Jixy</b>, your built-in Copilot. How can I help you today?</div>
+<div class="ai-chips" id="ai-quick-chips">
+<div class="ai-chip" onclick="sendQuickAiMessage('How does the App work?')">How it works</div>
+</div>
+</div>
+<div class="ai-footer">
+<input type="text" id="ai-input" autocomplete="off" placeholder="Ask a question..." onkeypress="handleAiEnter(event)">
+<button class="btn-send-ai" onclick="sendAiMessage()"><i class="material-icons" style="font-size:20px; margin-left:2px;">arrow_upward</i></button>
+</div>
+</div>
+<button id="ai-toggle-btn" onclick="toggleAI()" aria-label="Open AI Copilot">
+<svg class="ai-bot-face-svg" viewBox="0 0 100 100"><circle class="ai-eye-ball" cx="30" cy="50" r="16"/><circle class="ai-pupil" id="pupil-left" cx="30" cy="50" r="7"/><circle class="ai-eye-ball" cx="70" cy="50" r="16"/><circle class="ai-pupil" id="pupil-right" cx="70" cy="50" r="7"/></svg>
+</button>
+</div>
+
+<template id="compact-case-row-tmpl">
+<div class="compact-case-item">
+<div class="compact-case-meta">
+<span class="compact-case-date"></span>
+<span class="compact-case-badge datagrid-verdict"></span>
+</div>
+<div class="compact-case-preview-text"></div>
+<div class="compact-case-action-arrow">
+<span class="material-icons">chevron_right</span>
+</div>
+</div>
+</template>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<?!= include('JS'); ?>
+
+</body>
+</html>
+

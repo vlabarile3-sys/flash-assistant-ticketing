@@ -1,0 +1,1712 @@
+﻿/**
+ * =========================================
+ * UNIHUB Partner-SIDE ENGINE (V8 FRONTEND)
+ * Architect: System | Strict Anti-Laziness Protocol
+ * Feature: Multi-Channel, Side-Sheet Drawer, Nested Chrono Accordion
+ * Patch: V8 AST Parser Fix (ES5 Concat Strings), Document Selector Fix
+ * Feature: Advanced Bug Bento-Preview Engine & Local Cache Linkifier
+ * Feature: Temporal Controller (Retro-dated Slides & Auto-Week Bucketing)
+ * Feature: UX 2026 Focus Mode & QA Delete Engine
+ * Feature: Dynamic Knowledge Channels CMS
+ * Patch 5.0: DOM Persistence Fix (CSS Variables via JS)
+ * Patch 6.0: Smart Paragraph Parser & Typography Scroll Fix
+ * =========================================
+ */
+
+// --- 1. GLOBAL STATE & THEME ---
+const QA_SEED_TASKS = [
+    "Demo Review Cycle",
+    "Quality Sampling",
+    "Weekly Insights Summary",
+    "Knowledge Base Refresh",
+    "Coaching Follow-up",
+    "Coverage Planning",
+    "Cross-team Calibration",
+    "Operations Sync",
+    "Escalation Review",
+    "Documentation Audit"
+];
+
+let currentTheme = localStorage.getItem(`ops_theme_${APP_TEAM}`) || 'dark';
+let isAgent = APP_TEAM === 'AGENT';
+
+// UniHub Core State
+let qaDatabase = [], qaCategories = [], pocDatabase = [], qaNamesList = [], taskLinksDatabase = {}, appTasks = [];
+let knowledgeChannels = ['General KB', 'Process KB', 'Playbook']; 
+let currentTags = [], currentKeywords = [];
+let currentCategory = 'Tutti';
+let isListView = localStorage.getItem(`qaU18_View_${APP_TEAM}`) === 'list';
+let currentScheduleDate = new Date(); 
+
+// Demo State
+let state = { 
+    tabs: [], headers: [], fullData: [], cachedSheet: null, currentPage: 1, totalPages: 1, 
+    cart: [], hiddenColumns: new Set(), activeFilters: {}, activeWorkflow: 'WF-DEMO', 
+    editingCartIndex: null, pendingMap: null, specificRowId: null 
+};
+let localBugCache = {}, currentMultiSearchResults = [], currentSearchQuery = "";
+let publishedSlidesDb = []; 
+
+// Agent Hub State
+let agentAlignmentsData = [];
+let activeVerdictFilter = 'ALL';
+let activeAgentChannel = 'General KB'; 
+let isCompactMode = false; 
+
+// Modals
+let fileModal, categoryModal, pocModalObj, slideExpandModalObj;
+
+document.addEventListener('DOMContentLoaded', () => {
+    applyTheme();
+    document.body.style.opacity = '0.5';
+    
+    if (!isAgent) {
+        fileModal = new bootstrap.Modal(document.getElementById('fileModal'));
+        categoryModal = new bootstrap.Modal(document.getElementById('categoryModal'));
+        pocModalObj = new bootstrap.Modal(document.getElementById('pocModal'));
+        
+        const slideDateInput = document.getElementById('slideDate');
+        if (slideDateInput) slideDateInput.valueAsDate = new Date();
+    }
+
+    slideExpandModalObj = new bootstrap.Modal(document.getElementById('slideExpandModal'));
+
+    if (isAgent) {
+        switchView('alignments'); 
+        loadMasterAppData('QA'); 
+        loadAgentAlignments();
+    } else {
+        switchView('welcome', document.getElementById('menu-welcome'));
+        loadMasterAppData(APP_TEAM);
+        loadBugCache(); 
+        
+        if (APP_TEAM === 'QA') {
+          loadPublishedDbForQA(); 
+          loadAgentAlignments(); 
+        }
+    }
+    
+    const bootstrapModals = ['fileModal', 'categoryModal', 'pocModal', 'bugPreviewModal', 'slideExpandModal'];
+    bootstrapModals.forEach(modalId => {
+        const modalEl = document.getElementById(modalId);
+        if (modalEl) {
+            modalEl.addEventListener('hidden.bs.modal', function () {
+                if (document.activeElement) {
+                    document.activeElement.blur();
+                }
+            });
+        }
+    });
+
+    window.onclick = function(event) { 
+        if (event.target == document.getElementById('inspectorModal')) closeModal('inspectorModal'); 
+        if (event.target == document.getElementById('columnModal')) closeModal('columnModal'); 
+        if (event.target == document.getElementById('settingsModal')) closeModal('settingsModal'); 
+        if (event.target == document.getElementById('searchResultsModal')) closeModal('searchResultsModal'); 
+        if (!event.target.closest('.search-box') && !event.target.closest('.filter-popup')) closeSearchMenu();
+        if (!event.target.closest('.task-name-cell') && !event.target.closest('.task-bubble')) {
+            const bubble = document.getElementById('taskBubble');
+            if(bubble) bubble.classList.remove('visible');
+        }
+    }
+});
+
+// --- 2. CORE UTILITIES & UI MANAGEMENT ---
+function applyTheme() {
+    document.documentElement.setAttribute('data-theme', currentTheme);
+    const iconName = currentTheme === 'dark' ? 'light_mode' : 'dark_mode';
+    if(document.getElementById('themeIconWe')) document.getElementById('themeIconWe').innerText = iconName;
+    const root = document.documentElement;
+    if(currentTheme === 'dark') { root.style.setProperty('--close-filter', 'invert(1) grayscale(100%) brightness(200%)'); } 
+    else { root.style.setProperty('--close-filter', 'none'); }
+}
+
+function toggleTheme() { 
+    currentTheme = currentTheme === 'light' ? 'dark' : 'light'; 
+    localStorage.setItem(`ops_theme_${APP_TEAM}`, currentTheme); 
+    applyTheme(); 
+}
+
+function toggleSidebar() { 
+    document.getElementById('appSidebar').classList.toggle('collapsed'); 
+}
+
+function switchView(viewName, menuItemElement) {
+    if(menuItemElement) {
+        document.querySelectorAll('.menu-item').forEach(m => m.classList.remove('active'));
+        menuItemElement.classList.add('active'); 
+    }
+    document.querySelectorAll('.view-section').forEach(v => v.classList.remove('active'));
+    document.getElementById(`view-${viewName}`).classList.add('active');
+    
+    const brandContainer = document.getElementById('sidebarBrand');
+    if (brandContainer) {
+        if (viewName === 'forge' && !isAgent) {
+            brandContainer.innerHTML = `<img src="https://example.com/resource" style="height: 28px; width: auto; object-fit: contain; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));"><span id="brandTeamName" style="color: var(--primary); font-weight: 800; font-family: var(--font-display); letter-spacing: -0.5px;">Demo Slide</span>`;
+        } else {
+            const teamName = isAgent ? 'AGENT Hub' : APP_TEAM + ' Hub';
+            brandContainer.innerHTML = `<svg viewBox="0 0 24 24" width="28" height="28" fill="var(--primary)"><path d="M7 3.5l11 7.5-11 7.5v-4l6-3.5-6-3.5v-4z" /></svg><span id="brandTeamName" style="color: var(--text-main);">${teamName}</span>`;
+        }
+    }
+
+    const jixyWidget = document.getElementById('ai-widget-container');
+    if (jixyWidget) {
+        const isForgeViewActive = viewName === 'forge' && !isAgent && (APP_TEAM === 'QA');
+        if (isForgeViewActive) {
+            jixyWidget.style.display = 'none';
+        } else {
+            jixyWidget.style.display = 'block';
+        }
+    }
+
+    if(viewName === 'suitcase') renderSidebar();
+}
+
+function showToast(message, type = 'success') { 
+    const container = document.getElementById('toastContainer'); 
+    if(!container) return; 
+    const toast = document.createElement('div'); 
+    toast.className = `custom-toast ${type}`; 
+    let iconStr = type === 'success' ? 'check_circle' : (type === 'error' ? 'error' : 'info');
+    toast.innerHTML = `<i class="material-icons">${iconStr}</i><span class="text">${message}</span>`; 
+    container.appendChild(toast); 
+    setTimeout(() => toast.classList.add('show'), 10); 
+    setTimeout(() => { toast.classList.remove('show'); setTimeout(() => toast.remove(), 400); }, 3000); 
+}
+
+function loader(show) { 
+    const l = document.getElementById('loader'); 
+    if(l) l.style.width = show ? '100%' : '0%'; 
+}
+
+function closeModal(id) { 
+    const el = document.getElementById(id);
+    if(el) el.style.display = 'none'; 
+    if (document.activeElement) document.activeElement.blur(); 
+}
+
+function escapeHTML(str) { 
+    return str ? str.toString().replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') : ''; 
+}
+
+function escapeForFunctionCall(str) { 
+    return str ? str.toString().replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;').replace(/\n/g, '\\n').replace(/\r/g, '\\r') : ""; 
+}
+
+function copyToClipboard(text) { 
+    navigator.clipboard.writeText(text).then(() => showToast("Copied successfully!", "success")); 
+}
+
+function copyModalContent() { 
+    navigator.clipboard.writeText(document.getElementById('inspectorContent').innerText).then(() => showToast("Text copied successfully!", "success")); 
+}
+
+/**
+ * FEATURE: ENHANCED AUTO-LINKIFIER ENGINE & SMART PARAGRAPHS
+ */
+function formatCellContent(text) {
+    if (!text) return '';
+    let escaped = escapeHTML(text.toString());
+    
+    // Auto-Link URLs
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    escaped = escaped.replace(urlRegex, function(url) {
+        return '<a href="' + url + '" target="_blank" rel="noopener noreferrer" style="color: #60a5fa; text-decoration: underline; font-weight: 700;" onclick="event.stopPropagation()">' + url + '</a>';
+    });
+    
+    // Tracker Safe Linkifier
+    const bugRegex = /\b(?:b\/|bug\s*#?|issue\s*#?)(\d+)\b/gi;
+    escaped = escaped.replace(bugRegex, function(match, bugId) {
+        return '<span class="badge bg-danger text-white px-2 py-1 mx-1 font-code" style="font-weight: 800; letter-spacing: 0.5px; cursor: pointer; box-shadow: 0 2px 4px rgba(225, 29, 72, 0.3);" onclick="previewBug(\'' + bugId + '\', event)"><i class="material-icons" style="font-size: 11px; vertical-align: middle;">bug_report</i> ' + match.toUpperCase() + '</span>';
+    });
+
+    // SMART PARAGRAPH PARSER: Divide i doppi a capo in blocchi distanziati
+    var blocks = escaped.split(/\n\s*\n/);
+    var parsedHtml = blocks.map(function(block) {
+        // I singoli "a capo" rimasti vengono convertiti in <br> per non rompere il testo
+        return '<div style="margin-bottom: 14px;">' + block.replace(/\n/g, '<br>') + '</div>';
+    }).join('');
+
+    return parsedHtml;
+}
+
+/**
+ * FEATURE: LOCAL CACHE BUG PREVIEW BUILDER (BENTO UI)
+ */
+function previewBug(bugId, event) {
+    if (event) event.stopPropagation();
+    
+    closeModal('inspectorModal');
+    closeModal('searchResultsModal');
+    
+    var bugData = localBugCache[bugId];
+    var modalEl = document.getElementById('bugPreviewModal');
+    if (!modalEl) return;
+    
+    var bugModal = new bootstrap.Modal(modalEl);
+    
+    document.getElementById('previewBugId').textContent = bugId;
+    var linkEl = document.getElementById('previewBugLink');
+    if (linkEl) linkEl.href = "https://example.com/resource" + bugId;
+    
+    var subjectEl = document.getElementById('previewBugSubject');
+    var dateEl = document.getElementById('previewBugDate');
+    var workflowEl = document.getElementById('previewBugWorkflow');
+    var globalEl = document.getElementById('previewGlobalDecision');
+    var timelineEl = document.getElementById('previewBugTimeline');
+    
+    if (bugData) {
+        if (subjectEl) subjectEl.textContent = bugData.subject || "No Subject Available";
+        if (dateEl) dateEl.innerHTML = '<i class="material-icons" style="font-size:14px; vertical-align:middle; opacity:0.7;">calendar_today</i> Thread Status Synchronized';
+        if (workflowEl) workflowEl.textContent = bugData.workflow || "WF-DEMO";
+        
+        globalEl.style.display = 'none';
+        globalEl.innerHTML = '';
+        timelineEl.innerHTML = '';
+        
+        var hasCases = false;
+
+        bugData.comments.forEach(function(comment) {
+            
+            if (comment.type === 'pa_verdict' && (comment.globalDecision || comment.globalPolicy)) {
+                globalEl.style.display = 'block';
+                var globCss = 'warning';
+                var globLower = (comment.globalDecision || "").toLowerCase();
+                
+                if (globLower.includes('no violation') || globLower.includes('safe') || globLower.includes('ok')) globCss = 'safe';
+                else if (globLower.includes('violation') || globLower.includes('dangerous') || globLower.includes('violative')) globCss = 'violation';
+
+                var globHtml = '<div class="bento-global-box ' + globCss + '">' +
+                               '<h6 class="fw-bold text-uppercase mb-2" style="color:var(--text-muted); font-size:0.75rem; letter-spacing:1px;"><i class="material-icons" style="font-size:16px; vertical-align:middle; margin-right:4px;">account_balance</i> PA GLOBAL VERDICT</h6>' +
+                               '<div class="d-flex align-items-center gap-2 mb-3">' +
+                               '<span class="badge" style="font-size:0.95rem; padding:8px 14px; background:var(--primary); color:#fff; font-weight:800;">' + escapeHTML(comment.globalDecision || "N/A") + '</span>' +
+                               '<span class="fw-bolder text-primary font-code">' + escapeHTML(comment.globalPolicy || "") + '</span>' +
+                               '</div>';
+                
+                var introContext = comment.body || comment.introText || "";
+                if (introContext) {
+                    globHtml += '<div class="bento-desc-wrapper">' + 
+                                '<div class="text-muted" style="font-size:0.95rem;">' + formatCellContent(introContext) + '</div>' +
+                                '<div class="bento-fade"></div>' +
+                                '</div>' +
+                                '<button class="bento-expand-btn mt-2" onclick="toggleBentoExpand(this)"><i class="material-icons" style="font-size:16px;">expand_more</i> Read Full Context</button>';
+                }
+                globHtml += '</div>';
+                globalEl.innerHTML = globHtml;
+            }
+
+            if (comment.structuredCases && comment.structuredCases.length > 0) {
+                hasCases = true;
+                comment.structuredCases.forEach(function(c) {
+                    var cLower = (c.verdictText || "").toLowerCase();
+                    var verdictCss = 'warning';
+                    if (cLower.includes('no violation') || cLower.includes('safe') || cLower.includes('ok') || cLower.includes('non violative')) verdictCss = 'safe';
+                    else if (cLower.includes('violation') || cLower.includes('dangerous') || cLower.includes('violative')) verdictCss = 'violation';
+                    
+                    var cardHtml = '<div class="bento-card ' + verdictCss + '">' +
+                                   '<div class="d-flex justify-content-between align-items-start mb-3 border-bottom pb-2" style="border-color:var(--border-glass)!important;">' +
+                                   '<div class="fw-bolder text-main" style="font-size:0.95rem; line-height:1.3; padding-right:10px;">' + escapeHTML(c.name) + '</div>' +
+                                   '<span class="datagrid-verdict ' + verdictCss + '">' + escapeHTML(c.verdictText) + '</span>' +
+                                   '</div>' +
+                                   '<div class="bento-desc-wrapper">' +
+                                   '<div class="text-muted" style="font-size:0.9rem;">' + formatCellContent(c.description) + '</div>' +
+                                   '<div class="bento-fade"></div>' +
+                                   '</div>' +
+                                   '<button class="bento-expand-btn" onclick="toggleBentoExpand(this)"><i class="material-icons" style="font-size:14px;">expand_more</i> Show Logic</button>' +
+                                   '</div>';
+                    
+                    timelineEl.innerHTML += cardHtml;
+                });
+            }
+        });
+
+        if (!hasCases) {
+            timelineEl.innerHTML = '<div class="col-12 text-center p-4 text-muted"><i class="material-icons mb-2" style="font-size:32px; opacity:0.5;">info</i><br>No granular cases extracted for this thread.</div>';
+        }
+
+    } else {
+        if (subjectEl) subjectEl.textContent = "Issue Data Pending Cache Sync";
+        if (dateEl) dateEl.innerHTML = '<i class="material-icons" style="font-size:14px; vertical-align:middle; opacity:0.7;">info</i> Index Scan Required';
+        if (workflowEl) workflowEl.textContent = "External Reference";
+        if (globalEl) globalEl.style.display = 'none';
+        if (timelineEl) {
+            timelineEl.innerHTML = '<div class="col-12 text-center p-5 text-muted">' +
+                                   '<i class="material-icons mb-3" style="font-size: 48px; opacity:0.4;">cloud_off</i>' +
+                                   '<p class="mb-1 fw-bold">This issue package has not been parsed by UniHub Miner yet.</p>' +
+                                   '<p class="small text-muted">You can inspect the full corporate thread natively on Tracker using the link above.</p>' +
+                                   '</div>';
+        }
+    }
+    
+    bugModal.show();
+}
+
+function toggleBentoExpand(btn) {
+    var wrapper = btn.previousElementSibling;
+    if (wrapper && wrapper.classList.contains('bento-desc-wrapper')) {
+        var isExpanded = wrapper.classList.contains('expanded');
+        if (isExpanded) {
+            wrapper.classList.remove('expanded');
+            btn.innerHTML = '<i class="material-icons" style="font-size:16px;">expand_more</i> Show Logic';
+        } else {
+            wrapper.classList.add('expanded');
+            btn.innerHTML = '<i class="material-icons" style="font-size:16px;">expand_less</i> Hide Logic';
+        }
+    }
+}
+
+// --- 3. UNIHUB: DATA SYNCHRONIZATION ---
+function loadMasterAppData(teamTarget) { 
+    google.script.run.withSuccessHandler(function(serverData) { 
+        if(serverData) { 
+            qaDatabase = serverData.db || []; 
+            pocDatabase = serverData.pocs || []; 
+            qaCategories = serverData.cats || []; 
+            qaNamesList = serverData.qas || []; 
+            taskLinksDatabase = serverData.links || {}; 
+            appTasks = serverData.tasks || []; 
+            knowledgeChannels = serverData.channels || ['General KB', 'Process KB', 'Playbook'];
+            
+            if(appTasks.length === 0 && teamTarget === 'QA') { 
+                appTasks = [...QA_SEED_TASKS]; 
+                if(!isAgent) syncToGlobalState(); 
+            } 
+        } else { 
+            appTasks = teamTarget === 'QA' ? [...QA_SEED_TASKS] : []; 
+            knowledgeChannels = ['General KB', 'Process KB', 'Playbook'];
+            if (appTasks.length > 0 && !isAgent) syncToGlobalState(); 
+        } 
+        
+        if(!isAgent) { 
+            updateViewToggleIcon(); 
+            updateScheduleMonthDisplay(); 
+            updateTaskSelectDropdown(); 
+            updateQaDatalist(); 
+            renderPOCs(); 
+        } 
+        
+        renderChannelsSidebar();
+        renderSidebar(); 
+        searchFiles(); 
+        document.body.style.opacity = '1'; 
+        
+        if (!knowledgeChannels.includes(activeAgentChannel) && knowledgeChannels.length > 0) {
+            activeAgentChannel = knowledgeChannels[0];
+            switchAgentChannel(activeAgentChannel);
+        }
+    }).loadGlobalData(teamTarget); 
+}
+
+function syncToGlobalState() { 
+    const payload = { db: qaDatabase, pocs: pocDatabase, cats: qaCategories, qas: qaNamesList, links: taskLinksDatabase, tasks: appTasks, channels: knowledgeChannels }; 
+    google.script.run.withFailureHandler(err => console.error("Sync Error:", err)).saveGlobalData(JSON.stringify(payload), APP_TEAM); 
+}
+
+function triggerCloudSync() { 
+    showToast("Starting cloud backup...", "info"); 
+    const payload = { db: qaDatabase, pocs: pocDatabase, cats: qaCategories, qas: qaNamesList, links: taskLinksDatabase, tasks: appTasks, channels: knowledgeChannels }; 
+    google.script.run.withSuccessHandler(res => { 
+        if(res.status === 'success') showToast(res.message, "success"); 
+        else showToast(res.message, "error"); 
+    }).syncDataToCloud(JSON.stringify(payload), APP_TEAM); 
+}
+
+function renderChannelsSidebar() {
+    const containers = document.querySelectorAll('.dynamic-channels-container');
+    containers.forEach(container => {
+        container.innerHTML = '';
+        knowledgeChannels.forEach(ch => {
+            let iconStr = 'menu_book';
+            let chColor = '16, 185, 129'; 
+            let chHex = '#10b981';
+
+            if (ch.toLowerCase().includes('Knowledge') || ch.toLowerCase().includes('or')) {
+                iconStr = 'balance';
+                chColor = '251, 191, 36'; 
+                chHex = '#fbbf24';
+            } else if (ch.toLowerCase().includes('PLAYBOOK') || ch.toLowerCase().includes('slide')) {
+                iconStr = 'school';
+                chColor = '96, 165, 250'; 
+                chHex = '#60a5fa';
+            } else if (ch.toLowerCase().includes('urgent')) {
+                iconStr = 'warning';
+                chColor = '225, 29, 72'; 
+                chHex = '#e11d48';
+            }
+            
+            const div = document.createElement('div');
+            div.className = `menu-item dynamic-channel-btn ${activeAgentChannel === ch ? 'active' : ''}`;
+            
+            div.style.setProperty('--ch-color', chHex);
+            div.style.setProperty('--ch-rgb', chColor);
+            
+            div.onclick = (e) => switchAgentChannel(ch, e.currentTarget);
+            div.innerHTML = `<i class="material-icons">${iconStr}</i> <span>${escapeHTML(ch)}</span>`;
+            container.appendChild(div);
+        });
+    });
+
+    const targetSel = document.getElementById('targetChannel');
+    if(targetSel) {
+        const currentVal = targetSel.value;
+        targetSel.innerHTML = '';
+        knowledgeChannels.forEach(ch => {
+            let iconE = 'Ã°Å¸Å¸Â¢';
+            if (ch.toLowerCase().includes('Knowledge') || ch.toLowerCase().includes('or')) iconE = 'Ã°Å¸Å¸Â¡';
+            else if (ch.toLowerCase().includes('PLAYBOOK') || ch.toLowerCase().includes('slide')) iconE = 'Ã°Å¸â€Âµ';
+            else if (ch.toLowerCase().includes('urgent')) iconE = 'Ã°Å¸â€Â´';
+            
+            targetSel.add(new Option(iconE + ' ' + ch, ch));
+        });
+        if(knowledgeChannels.includes(currentVal)) targetSel.value = currentVal;
+    }
+}
+
+// --- 4. UNIHUB: SCHEDULE & POC MODULE ---
+function updateTaskSelectDropdown() { const taskSelect = document.getElementById('pocTask'); if(!taskSelect) return; taskSelect.innerHTML = ''; appTasks.forEach(t => taskSelect.add(new Option(t, t))); }
+function updateScheduleMonthDisplay() { const display = document.getElementById('currentScheduleMonthDisplay'); if(!display) return; const opts = { month: 'long', year: 'numeric' }; const d1 = new Date(currentScheduleDate); const d3 = new Date(currentScheduleDate); d3.setMonth(d3.getMonth() + 2); display.innerText = `${d1.toLocaleDateString('en-US', opts).toUpperCase()} - ${d3.toLocaleDateString('en-US', opts).toUpperCase()}`; }
+function changeScheduleMonth(offset) { currentScheduleDate.setMonth(currentScheduleDate.getMonth() + (offset * 3)); state.specificRowId = null; updateScheduleMonthDisplay(); renderPOCs(); }
+function getScheduleMonthString(dateObj) { return `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}`; }
+function renderPOCs() { const grid = document.getElementById('pocGrid'); if(!grid) return; if (appTasks.length === 0) { grid.innerHTML = `<div class="text-center text-muted p-5 mt-4"><i class="material-icons mb-3" style="font-size: 48px; opacity: 0.5;">calendar_view_day</i><h4 class="fw-bold">Grid is Empty</h4><p>Click "Tasks" above to build your schedule.</p></div>`; return; } const dates = [ new Date(currentScheduleDate.getFullYear(), currentScheduleDate.getMonth(), 1), new Date(currentScheduleDate.getFullYear(), currentScheduleDate.getMonth() + 1, 1), new Date(currentScheduleDate.getFullYear(), currentScheduleDate.getMonth() + 2, 1) ]; const monthStrings = dates.map(d => getScheduleMonthString(d)); const monthHeaders = dates.map(d => d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }).toUpperCase()); let html = `<table class="schedule-table"><thead><tr><th>Task / Role</th><th>${monthHeaders[0]}</th><th>${monthHeaders[1]}</th><th>${monthHeaders[2]}</th></tr></thead><tbody>`; appTasks.forEach(taskName => { const hasLink = taskLinksDatabase[taskName] ? '<i class="material-icons text-primary" style="font-size: 16px;">link</i>' : ''; html += `<tr><td><div class="task-name-cell" onclick="openTaskBubble(event, '${taskName.replace(/'/g, "\\'")}')"><span>${taskName}</span> ${hasLink}</div></td>`; monthStrings.forEach(mStr => { const assignment = pocDatabase.find(p => p.task === taskName && p.month === mStr); if(assignment) { const initials = (assignment.pocName || 'QA').trim().split(/\s+/).map(n => n[0] || '').join('').substring(0,2).toUpperCase(); html += `<td><div class="cell-filled" onclick="openPocModal(${assignment.id})"><div class="slot-info"><div class="slot-avatar">${initials}</div><div class="slot-name">${escapeHTML(assignment.pocName)}</div></div><div class="btn-delete" onclick="event.stopPropagation(); deletePoc(${assignment.id})"><i class="material-icons" style="font-size:18px;">close</i></div></div></td>`; } else { html += `<td><div class="cell-empty" onclick="openPocModal(null, '${taskName.replace(/'/g, "\\'")}', '${mStr}')"><i class="material-icons">add</i></div></td>`; } }); html += `</tr>`; }); html += `</tbody></table>`; grid.innerHTML = html; }
+function openPocModal(id = null, prefillTask = null, prefillMonth = null) { if(appTasks.length === 0) { showToast("Please add a task first!", "error"); return; } document.getElementById('pocForm').reset(); document.getElementById('pocId').value = ''; document.getElementById('pocMonth').value = prefillMonth || getScheduleMonthString(new Date()); if(id) { const poc = pocDatabase.find(p => p.id === id); if(poc) { document.getElementById('pocId').value = poc.id; document.getElementById('pocTask').value = poc.task; document.getElementById('pocName').value = poc.pocName; document.getElementById('pocMonth').value = poc.month; } } else if (prefillTask) { document.getElementById('pocTask').value = prefillTask; } pocModalObj.show(); }
+function savePoc() { const id = document.getElementById('pocId').value, task = document.getElementById('pocTask').value, pocName = document.getElementById('pocName').value.trim(), month = document.getElementById('pocMonth').value; if(!task || !pocName || !month) return; const existing = pocDatabase.find(p => p.task === task && p.month === month && p.id != id); if(existing) { if(!confirm("Overwrite existing assignment?")) return; pocDatabase = pocDatabase.filter(p => p.id !== existing.id); } if(id) { const idx = pocDatabase.findIndex(p => p.id == id); if(idx > -1) pocDatabase[idx] = { id: parseInt(id), task, pocName, month }; } else { pocDatabase.push({ id: Date.now(), task, pocName, month }); } syncToGlobalState(); pocModalObj.hide(); if(document.activeElement) document.activeElement.blur(); renderPOCs(); showToast("Saved successfully!", "success"); }
+function deletePoc(id) { if(confirm("Are you sure you want to delete this assignment?")) { pocDatabase = pocDatabase.filter(p => p.id !== id); syncToGlobalState(); renderPOCs(); showToast("Deleted successfully!", "success"); } }
+function autoAssignTasks() { if(qaNamesList.length === 0) { showToast("Add POC names in settings first!", "error"); return; } if(appTasks.length === 0 || !confirm("Unassigned tasks will be randomly distributed. Proceed?")) return; const dates = [ new Date(currentScheduleDate.getFullYear(), currentScheduleDate.getMonth(), 1), new Date(currentScheduleDate.getFullYear(), currentScheduleDate.getMonth() + 1, 1), new Date(currentScheduleDate.getFullYear(), currentScheduleDate.getMonth() + 2, 1) ]; const monthStrings = dates.map(d => getScheduleMonthString(d)); let assignedCount = 0; let timeBase = Date.now(); appTasks.forEach(taskName => { monthStrings.forEach(mStr => { if(!pocDatabase.find(p => p.task === taskName && p.month === mStr)) { pocDatabase.push({ id: timeBase++, task: taskName, pocName: qaNamesList[Math.floor(Math.random() * qaNamesList.length)], month: mStr }); assignedCount++; } }); }); if(assignedCount > 0) { syncToGlobalState(); renderPOCs(); showToast(`Successfully assigned ${assignedCount} tasks!`, "success"); } else { showToast("All tasks are already assigned.", "info"); } }
+function openTaskBubble(event, taskName) { event.stopPropagation(); const bubble = document.getElementById('taskBubble'); const currentLink = taskLinksDatabase[taskName] || ''; bubble.innerHTML = `<div class="task-bubble-header"><span class="task-bubble-title">${escapeHTML(taskName)}</span><button class="btn btn-sm btn-icon border-0 p-0 shadow-none text-muted" onclick="document.getElementById('taskBubble').classList.remove('visible')"><i class="material-icons">close</i></button></div>${currentLink ? `<a href="${currentLink}" target="_blank" class="task-bubble-link"><i class="material-icons" style="font-size:16px;">open_in_new</i> Open Link</a>` : ''}<input type="url" id="bubbleLinkInput" class="form-control form-control-sm mb-2" placeholder="https://example.com/resource" value="${currentLink}"><button class="btn btn-primary w-100 rounded-pill fw-bold" onclick="saveTaskLink('${taskName.replace(/'/g, "\\'")}')">Save</button>`; const rect = event.currentTarget.getBoundingClientRect(); bubble.style.top = `${rect.top + window.scrollY - 10}px`; bubble.style.left = `${rect.right + 20}px`; bubble.classList.add('visible'); }
+function saveTaskLink(taskName) { const linkInput = document.getElementById('bubbleLinkInput').value.trim(); if(linkInput) { taskLinksDatabase[taskName] = linkInput; } else { delete taskLinksDatabase[taskName]; } syncToGlobalState(); document.getElementById('taskBubble').classList.remove('visible'); renderPOCs(); showToast("Link saved successfully!", "success"); }
+
+// --- 5. UNIHUB: SUITCASE & RESOURCES ---
+function updateViewToggleIcon() { const icon = document.querySelector('#btnViewToggle i'); if (icon) icon.innerText = isListView ? 'grid_view' : 'view_list'; }
+function toggleViewMode() { isListView = !isListView; localStorage.setItem(`qaU18_View_${APP_TEAM}`, isListView ? 'list' : 'grid'); updateViewToggleIcon(); searchFiles(); }
+function filterCategory(cat, el) { currentCategory = cat; document.querySelectorAll('.menu-item').forEach(m => m.classList.remove('active')); if(el) el.classList.add('active'); else { const tuttiMenu = document.getElementById('menu-tutti'); if(tuttiMenu) tuttiMenu.classList.add('active'); } if (document.getElementById('categoryTitleSuitcase')) { document.getElementById('categoryTitleSuitcase').innerText = cat === 'Tutti' ? 'All Materials' : escapeHTML(cat); } switchView('suitcase'); searchFiles(); }
+function renderSidebar() { const container = document.getElementById('dynamicCategories'); if(!container) return; container.innerHTML = ''; let displayCategories = qaCategories; if (isAgent) { const visibleFileCats = new Set(qaDatabase.filter(d => d.isAgentVisible === true).map(d => d.category)); displayCategories = qaCategories.filter(c => visibleFileCats.has(c)); } displayCategories.forEach(cat => { const div = document.createElement('div'); div.className = `menu-item ${currentCategory === cat ? 'active' : ''}`; div.innerHTML = `<i class="material-icons">folder</i> <span>${escapeHTML(cat)}</span>`; div.onclick = (e) => filterCategory(cat, e.currentTarget); container.appendChild(div); }); if(document.getElementById('docCategory')) { document.getElementById('docCategory').innerHTML = qaCategories.map(c => `<option value="${escapeHTML(c)}">${escapeHTML(c)}</option>`).join(''); } }
+function renderGrid(data) { const grid = document.getElementById('fileGrid'); if(!grid) return; grid.innerHTML = ''; if(isListView) grid.classList.add('list-view'); else grid.classList.remove('list-view'); document.getElementById('itemCount').innerText = `${data.length} items`; if(data.length === 0) { grid.innerHTML = `<div class="text-muted w-100 mt-4 d-flex align-items-center gap-2"><i class="material-icons">info</i> <span>No items found.</span></div>`; return; } data.forEach(item => { let iconCss = 'icon-link', iName = 'link'; if(item.type==='sheet'){ iconCss='icon-sheet'; iName='table_chart'; } else if(item.type==='doc'){ iconCss='icon-doc'; iName='description';} else if(item.type==='pdf'){ iconCss='icon-pdf'; iName='picture_as_pdf';} let visibilityBadge = ''; if (!isAgent && item.isAgentVisible) { visibilityBadge = `<div style="position:absolute; top:-6px; left:-6px; background:var(--primary); color:white; font-size:10px; font-weight:bold; padding:2px 8px; border-radius:10px; box-shadow:0 2px 5px rgba(0,0,0,0.3); z-index:5;"><i class="material-icons" style="font-size:10px; vertical-align:middle;">visibility</i> AGENT</div>`; } let adminActions = ''; if (!isAgent) { adminActions = `<div class="btn-icon-sm" onclick="event.stopPropagation(); openFileModal(${item.id})"><i class="material-icons" style="font-size:18px;">edit</i></div><div class="btn-icon-sm delete" onclick="event.stopPropagation(); deleteDocument(${item.id})"><i class="material-icons" style="font-size:18px;">delete</i></div>`; } const cardHtml = `${visibilityBadge}<div class="card-actions"><div class="btn-icon-sm copy" onclick="event.stopPropagation(); copyToClipboard('${item.url}')"><i class="material-icons" style="font-size:18px;">content_copy</i></div>${adminActions}</div><div class="file-icon ${iconCss}"><i class="material-icons">${iName}</i></div><div class="file-title" title="${escapeHTML(item.title)}">${escapeHTML(item.title)}</div><div class="file-meta"><span class="d-flex align-items-center gap-1"><i class="material-icons" style="font-size:14px">folder_open</i> ${escapeHTML(item.category)}</span></div>`; const card = document.createElement('div'); card.className = 'file-card'; card.innerHTML = cardHtml; card.onclick = () => window.open(item.url, '_blank'); grid.appendChild(card); }); }
+function searchFiles() { const query = document.getElementById('searchInput').value.toLowerCase(); let filtered = currentCategory === 'Tutti' ? qaDatabase : qaDatabase.filter(d => d.category === currentCategory); if (isAgent) filtered = filtered.filter(d => d.isAgentVisible === true); if(query) { filtered = filtered.filter(d => d.title.toLowerCase().includes(query) || d.category.toLowerCase().includes(query)); } renderGrid(filtered); }
+function openFileModal(id = null) { if(qaCategories.length === 0) { showToast("Please create a category folder first.", "error"); return; } document.getElementById('fileForm').reset(); document.getElementById('docId').value = ''; currentTags = []; currentKeywords = []; if(document.getElementById('docAgentVisible')) document.getElementById('docAgentVisible').checked = false; if(id) { const doc = qaDatabase.find(d => d.id === id); if(doc) { document.getElementById('docId').value = doc.id; document.getElementById('docTitle').value = doc.title; document.getElementById('docUrl').value = doc.url; document.getElementById('docCategory').value = doc.category; document.getElementById('docType').value = doc.type; if(document.getElementById('docAgentVisible')) document.getElementById('docAgentVisible').checked = !!doc.isAgentVisible; currentTags = doc.tags || []; currentKeywords = doc.keywords || []; } } else if(currentCategory !== 'Tutti') { document.getElementById('docCategory').value = currentCategory; } renderTokens('tags'); renderTokens('kw'); fileModal.show(); }
+function saveDocument() { const id = document.getElementById('docId').value, title = document.getElementById('docTitle').value, url = document.getElementById('docUrl').value, cat = document.getElementById('docCategory').value, type = document.getElementById('docType').value; const isVisibleToAgent = document.getElementById('docAgentVisible') ? document.getElementById('docAgentVisible').checked : false; const docPayload = { id: id ? parseInt(id) : Date.now(), title, url, category: cat, type, date: new Date().toISOString().split('T')[0], isAgentVisible: isVisibleToAgent, tags: [...currentTags], keywords: [...currentKeywords] }; if(id) { const index = qaDatabase.findIndex(d => d.id == id); if(index > -1) Object.assign(qaDatabase[index], docPayload); } else { qaDatabase.push(docPayload); } syncToGlobalState(); fileModal.hide(); if(document.activeElement) document.activeElement.blur(); searchFiles(); showToast("Resource saved successfully!", "success"); }
+function deleteDocument(id) { if(confirm("Are you sure you want to delete this resource?")) { qaDatabase = qaDatabase.filter(d => d.id !== id); syncToGlobalState(); searchFiles(); renderSidebar(); showToast("Resource deleted successfully.", "success"); } }
+function handleTokenKeydown(e, type) { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); const val = e.target.value.trim().replace(/,/g, ''); if (val) { const arr = type === 'tags' ? currentTags : currentKeywords; if (!arr.includes(val.toLowerCase())) { arr.push(val.toLowerCase()); renderTokens(type); } e.target.value = ''; } } }
+function renderTokens(type) { const arr = type === 'tags' ? currentTags : currentKeywords; document.getElementById(type === 'tags' ? 'tagsTokenList' : 'kwTokenList').innerHTML = arr.map((t, i) => `<div class="token-chip-item">${escapeHTML(t)} <i class="material-icons" onclick="removeToken('${type}', ${i})">close</i></div>`).join(''); }
+function removeToken(type, index) { if (type === 'tags') currentTags.splice(index, 1); else currentKeywords.splice(index, 1); renderTokens(type); }
+
+function openChannelManager() {
+    document.getElementById('channelSectionModal').style.display='block';
+    document.getElementById('folderSectionModal').style.display='none';
+    document.getElementById('teamSectionModal').style.display='none';
+    document.getElementById('taskSectionModal').style.display='none';
+    renderChannelList();
+    categoryModal.show();
+}
+function openCategoryManager() { document.getElementById('channelSectionModal').style.display='none'; document.getElementById('folderSectionModal').style.display='block'; document.getElementById('teamSectionModal').style.display='none'; document.getElementById('taskSectionModal').style.display='none'; renderCategoryList(); categoryModal.show(); }
+function openTeamManager() { document.getElementById('channelSectionModal').style.display='none'; document.getElementById('folderSectionModal').style.display='none'; document.getElementById('teamSectionModal').style.display='block'; document.getElementById('taskSectionModal').style.display='none'; renderQaList(); categoryModal.show(); }
+function openTasksManager() { document.getElementById('channelSectionModal').style.display='none'; document.getElementById('folderSectionModal').style.display='none'; document.getElementById('teamSectionModal').style.display='none'; document.getElementById('taskSectionModal').style.display='block'; renderAppTaskList(); categoryModal.show(); }
+
+function renderChannelList() {
+    document.getElementById('channelListContainer').innerHTML = knowledgeChannels.map((c) => {
+        return `<div class="cat-list-item"><span class="text-secondary fw-bold">${escapeHTML(c)}</span><button class="btn btn-icon-sm delete border-0 shadow-none" onclick="deleteChannel('${c.replace(/'/g, "\\'")}')"><i class="material-icons">delete</i></button></div>`;
+    }).join('');
+}
+function addChannel() {
+    const val = document.getElementById('newChannelInput').value.trim();
+    if(val && !knowledgeChannels.includes(val)) {
+        knowledgeChannels.push(val);
+        syncToGlobalState();
+        document.getElementById('newChannelInput').value = '';
+        renderChannelList();
+        renderChannelsSidebar();
+    }
+}
+function deleteChannel(chName) {
+    if(confirm("Are you sure you want to delete this channel? Note: Slides associated with this channel will be hidden from the main views.")) {
+        knowledgeChannels = knowledgeChannels.filter(c => c !== chName);
+        if (knowledgeChannels.length === 0) knowledgeChannels = ['General KB', 'Process KB', 'Playbook'];
+        if (activeAgentChannel === chName) activeAgentChannel = knowledgeChannels[0];
+        syncToGlobalState();
+        renderChannelList();
+        renderChannelsSidebar();
+        switchAgentChannel(activeAgentChannel);
+    }
+}
+
+function renderCategoryList() { document.getElementById('categoryListContainer').innerHTML = qaCategories.map((c, i) => { const filesInCat = qaDatabase.filter(d => d.category === c); const isVisible = filesInCat.length > 0 && filesInCat.some(d => d.isAgentVisible); const eyeIcon = isVisible ? 'visibility' : 'visibility_off'; const eyeColor = isVisible ? 'var(--primary)' : 'var(--text-muted)'; return `<div class="cat-list-item"><span class="text-secondary fw-bold">${escapeHTML(c)}</span><div class="d-flex gap-1"><button class="btn btn-icon-sm border-0 shadow-none" onclick="toggleCategoryVisibility('${c.replace(/'/g, "\\'")}')" style="color: ${eyeColor}" title="Toggle Agent Visibility"><i class="material-icons">${eyeIcon}</i></button><button class="btn btn-icon-sm delete border-0 shadow-none" onclick="deleteCategory('${c.replace(/'/g, "\\'")}')"><i class="material-icons">delete</i></button></div></div>`; }).join(''); }
+function toggleCategoryVisibility(catName) { const filesInCat = qaDatabase.filter(d => d.category === catName); if (filesInCat.length === 0) return showToast("Folder is empty. Add items first.", "info"); const currentlyVisible = filesInCat.some(d => d.isAgentVisible); const newState = !currentlyVisible; qaDatabase.forEach(d => { if(d.category === catName) d.isAgentVisible = newState; }); syncToGlobalState(); renderCategoryList(); searchFiles(); showToast(`Folder visibility set to: ${newState ? 'Visible' : 'Hidden'}`, "success"); }
+function addCategory() { const val = document.getElementById('newCategoryInput').value.trim(); if(val && !qaCategories.includes(val)) { qaCategories.push(val); syncToGlobalState(); document.getElementById('newCategoryInput').value=''; renderCategoryList(); renderSidebar(); } }
+function deleteCategory(catName) { if(confirm("Delete this folder and move its items to Uncategorized?")) { qaDatabase.forEach(d => { if(d.category === catName) d.category = "Uncategorized"; }); qaCategories = qaCategories.filter(c => c !== catName); if (!qaCategories.includes("Uncategorized") && qaDatabase.some(d => d.category === "Uncategorized")) qaCategories.push("Uncategorized"); syncToGlobalState(); renderSidebar(); searchFiles(); renderCategoryList(); } }
+function renderQaList() { document.getElementById('qaListContainer').innerHTML = qaNamesList.map(n => `<div class="cat-list-item"><span class="text-secondary">${escapeHTML(n)}</span><button class="btn btn-icon-sm delete border-0 shadow-none" onclick="deleteQaName('${n.replace(/'/g, "\\'")}')"><i class="material-icons">delete</i></button></div>`).join(''); updateQaDatalist(); }
+function addQaName() { const val = document.getElementById('newQaInput').value.trim(); if(val && !qaNamesList.includes(val)) { qaNamesList.push(val); syncToGlobalState(); document.getElementById('newQaInput').value=''; renderQaList(); } }
+function deleteQaName(name) { qaNamesList = qaNamesList.filter(n => n !== name); syncToGlobalState(); renderQaList(); }
+function updateQaDatalist() { const dl = document.getElementById('qaNamesDatalist'); if(dl) dl.innerHTML = qaNamesList.map(n => `<option value="${escapeHTML(n)}">`).join(''); }
+function renderAppTaskList() { document.getElementById('taskListContainer').innerHTML = appTasks.map((task, idx) => `<div class="cat-list-item"><span class="text-secondary fw-bold">${escapeHTML(task)}</span><button class="btn btn-icon-sm delete border-0 shadow-none" onclick="deleteAppTask('${task.replace(/'/g, "\\'")}')"><i class="material-icons">delete</i></button></div>`).join(''); }
+function addAppTask() { const val = document.getElementById('newTaskInput').value.trim(); if(val && !appTasks.includes(val)) { appTasks.push(val); syncToGlobalState(); document.getElementById('newTaskInput').value=''; renderAppTaskList(); updateTaskSelectDropdown(); renderPOCs(); } }
+function deleteAppTask(taskName) { if(confirm("Delete this task? It will be removed from the master schedule.")) { appTasks = appTasks.filter(t => t !== taskName); pocDatabase = pocDatabase.filter(p => p.task !== taskName); delete taskLinksDatabase[taskName]; syncToGlobalState(); renderAppTaskList(); updateTaskSelectDropdown(); renderPOCs(); } }
+
+// --- 6. Demo FORGE (AUTHORING) ---
+function extractIdFromUrl(str) { const match = str.match(/\/d\/([a-zA-Z0-9-_]+)/); return match ? match[1] : str; }
+
+function onWorkflowFilterChange() { 
+    state.activeWorkflow = document.getElementById('workflowFilter').value; 
+    state.specificRowId = null; 
+    loadPublishedDbForQA();
+    if(state.cachedSheet) loadTable(1); 
+}
+
+function loadPublishedDbForQA() {
+    if (state.activeWorkflow === 'ALL') return; 
+    google.script.run.withSuccessHandler(res => {
+        if(res.success && res.data) {
+            publishedSlidesDb = res.data;
+            if (state.fullData && state.fullData.length > 0) renderLocalTable(state.currentPage);
+        }
+    }).fetchAlignments(state.activeWorkflow); 
+}
+
+function connectSheet() {
+    const id = extractIdFromUrl(document.getElementById('sourceId').value); if(!id) return;
+    document.getElementById('sourceId').value = id; loader(true);
+    const btn = document.getElementById('btnConnectSync'); const originalHtml = btn.innerHTML;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>'; btn.disabled = true;
+
+    google.script.run.withSuccessHandler(res => {
+        loader(false); btn.innerHTML = originalHtml; btn.disabled = false;
+        if(res.success) {
+            state.tabs = res.metadata;
+            const sel = document.getElementById('tabSelect'); sel.innerHTML = '<option value="">-- Select Sheet --</option>';
+            res.metadata.forEach((m,i) => sel.innerHTML += `<option value="${i}">${escapeHTML(m.name)}</option>`);
+            document.getElementById('configArea').style.display = 'block'; showToast("Spreadsheet connected successfully.");
+            populateSearchTabsList(res.metadata); 
+        } else showToast(res.error, "error");
+    }).getSheetMetadata(id);
+}
+
+function onTabChange() {
+    const idx = document.getElementById('tabSelect').value; if(idx === "") return;
+    state.cachedSheet = null; state.specificRowId = null; loader(true); 
+    google.script.run.withSuccessHandler(res => {
+        loader(false);
+        if(res.success && res.config) { document.getElementById('headerRow').value = res.config.headerRow||1; state.pendingMap = res.config.mapping; }
+        fetchHeaders(false);
+    }).loadSheetConfig({ spreadsheetId: document.getElementById('sourceId').value, sheetName: state.tabs[idx].name });
+}
+
+function fetchHeaders(isRefetch = false) {
+    const idx = document.getElementById('tabSelect').value; if(idx === "") return; loader(true);
+    let btn, originalHtml;
+    if (isRefetch) { btn = document.getElementById('btnRefetch'); if (btn) { originalHtml = btn.innerHTML; btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>'; btn.disabled = true; } }
+
+    google.script.run.withSuccessHandler(res => {
+        if (isRefetch && btn) { btn.innerHTML = originalHtml; btn.disabled = false; }
+        if(res.success) { state.headers = res.headers; updateMaps(); loadTable('last'); }
+    }).getSheetHeaders({ spreadsheetId: document.getElementById('sourceId').value, sheetName: state.tabs[idx].name, headerRow: document.getElementById('headerRow').value });
+}
+
+function updateMaps() {
+    const map = state.pendingMap || {};
+    document.querySelectorAll('.col-map').forEach(sel => {
+        const field = sel.dataset.field; let saved = map[field];
+        sel.innerHTML = '<option value="">-- Skip --</option>';
+        state.headers.forEach(h => { 
+            let isSel = (h.index == saved) ? 'selected' : '';
+            sel.innerHTML += `<option value="${h.index}" ${isSel}>${escapeHTML(h.name)}</option>`; 
+        });
+    });
+}
+
+function onMappingChange() {
+    const idx = document.getElementById('tabSelect').value; if(idx === "") return;
+    const mapping = {}; document.querySelectorAll('.col-map').forEach(s => mapping[s.dataset.field] = s.value);
+    google.script.run.saveSheetConfig({ spreadsheetId: document.getElementById('sourceId').value, sheetName: state.tabs[idx].name, headerRow: document.getElementById('headerRow').value, mapping: mapping });
+    renderLocalTable(state.currentPage); 
+}
+
+function loadTable(targetPage = 'last', specificRowId = null) {
+    const idx = document.getElementById('tabSelect').value; if(idx === "") return;
+    const tabName = state.tabs[idx].name;
+    state.specificRowId = specificRowId; 
+    
+    if(state.cachedSheet === tabName) return renderLocalTable(targetPage);
+    
+    loader(true); 
+    const infoEl = document.getElementById('pageInfo');
+    if (infoEl) infoEl.innerText = "Downloading data..."; 
+    
+    google.script.run.withSuccessHandler(res => {
+        loader(false);
+        if(res.success) { 
+            state.fullData = res.data; 
+            state.cachedSheet = tabName; 
+            renderLocalTable(targetPage); 
+        }
+        else showToast(res.error, "error");
+    }).fetchFullSheetData({ 
+        spreadsheetId: document.getElementById('sourceId').value, 
+        sheetName: tabName, 
+        headerRow: document.getElementById('headerRow').value 
+    });
+}
+
+function renderLocalTable(targetPage = 1) {
+    const tbody = document.getElementById('tBody'); 
+    tbody.innerHTML = '';
+    const thead = document.getElementById('tHead'); 
+    
+    let headerHtml = '<tr><th style="width:60px">Add</th><th style="width:60px">Row</th>';
+    state.headers.forEach(h => { 
+        headerHtml += `<th class="col-idx-${h.index}">${escapeHTML(h.name)}</th>`; 
+    });
+    headerHtml += '</tr>'; 
+    thead.innerHTML = headerHtml;
+    
+    let filtered = state.fullData || [];
+    let paginatedData = [];
+    let itemsPerPage = 30; 
+    
+    const userColIdx = document.querySelector('.col-map[data-field="user"]')?.value;
+    const botColIdx = document.querySelector('.col-map[data-field="bot"]')?.value;
+    const targetChannel = document.getElementById('targetChannel') ? document.getElementById('targetChannel').value : 'General KB';
+
+    if (state.specificRowId) { 
+        paginatedData = filtered.filter(r => r.realRowIndex == state.specificRowId); 
+        const pageEl = document.getElementById('pageInfo');
+        if(pageEl) pageEl.innerHTML = `<span style="color:var(--primary); font-weight:700;">SEARCH (Row ${state.specificRowId})</span>`; 
+    } else { 
+        state.totalPages = Math.ceil(filtered.length / itemsPerPage) || 1;
+        if (targetPage === 'last') state.currentPage = state.totalPages;
+        else if (targetPage !== null) state.currentPage = targetPage;
+        
+        if (state.currentPage < 1) state.currentPage = 1;
+        if (state.currentPage > state.totalPages) state.currentPage = state.totalPages;
+        
+        let startIdx = (state.currentPage - 1) * itemsPerPage;
+        let endIdx = startIdx + itemsPerPage;
+        paginatedData = filtered.slice(startIdx, endIdx);
+        
+        const pageEl = document.getElementById('pageInfo');
+        if(pageEl) pageEl.innerText = `Page ${state.currentPage} of ${state.totalPages}`; 
+    }
+
+    paginatedData.forEach(r => {
+        const tr = document.createElement('tr'); 
+        const isInCart = state.cart.some(i => i.sourceRow === r.realRowIndex);
+        if(isInCart) tr.classList.add('row-selected');
+        
+        let isPublished = false;
+        if (userColIdx && userColIdx !== "" && publishedSlidesDb.length > 0) {
+            const promptText = (r.cells[parseInt(userColIdx)] || "").toString().trim();
+            const botText = (botColIdx && botColIdx !== "") ? (r.cells[parseInt(botColIdx)] || "").toString().trim() : "";
+            
+            if (promptText) {
+                const normPrompt = promptText.toLowerCase().replace(/\s+/g, ' ');
+                const normBot = botText.toLowerCase().replace(/\s+/g, ' ');
+                
+                isPublished = publishedSlidesDb.some(slide => {
+                    const sPrompt = (slide.user || "").toString().toLowerCase().replace(/\s+/g, ' ');
+                    const sBot = (slide.bot || "").toString().toLowerCase().replace(/\s+/g, ' ');
+                    return sPrompt === normPrompt && sBot === normBot && (slide.channel || 'General KB') === targetChannel;
+                });
+            }
+        }
+        if (isPublished) tr.classList.add('ghost-green');
+
+        let isChk = isInCart ? 'checked' : '';
+        let safeSheet = escapeForFunctionCall(state.cachedSheet);
+        
+        let html = `<td><input type="checkbox" class="neon-checkbox" onclick="toggleRow(${r.realRowIndex}, '${safeSheet}', this)" ${isChk}></td><td style="color:var(--primary); font-weight:700;">${r.realRowIndex}</td>`;
+        for (let i = 0; i < state.headers.length; i++) { 
+            let safeCell = escapeHTML(r.cells[i] || '');
+            html += `<td class="col-idx-${state.headers[i].index}" onclick="openInspector(this.innerText)" title="${safeCell}">${safeCell}</td>`; 
+        }
+        tr.innerHTML = html; 
+        tbody.appendChild(tr);
+    });
+    applyColumnVisibility();
+}
+
+function changePage(dir) { 
+    if(!state.fullData || state.fullData.length === 0) return;
+    state.specificRowId = null; 
+    let newPage = state.currentPage + dir;
+    if (newPage >= 1 && newPage <= state.totalPages) {
+        renderLocalTable(newPage);
+    } else {
+        showToast("Page limit reached.", "info");
+    }
+}
+
+function forceRefresh() { 
+    state.cachedSheet = null; 
+    state.specificRowId = null; 
+    showToast("Refreshing data...", "info"); 
+    loadTable(state.currentPage); 
+}
+
+function openColumnManager() {
+    const list = document.getElementById('colManagerList'); 
+    list.innerHTML = '';
+    state.headers.forEach(h => {
+        const isVisible = !state.hiddenColumns.has(h.index);
+        let chk = isVisible ? 'checked' : '';
+        list.innerHTML += `<div class="d-flex align-items-center gap-2 mb-2 p-2 border rounded" style="border-color:var(--border-glass) !important"><input type="checkbox" class="neon-checkbox" onchange="toggleColumnState(${h.index}, this.checked)" ${chk}><span class="small fw-bold">${escapeHTML(h.name)}</span></div>`;
+    });
+    document.getElementById('columnModal').style.display = 'block';
+}
+
+function toggleColumnState(index, isVisible) { 
+    if (isVisible) state.hiddenColumns.delete(index); 
+    else state.hiddenColumns.add(index); 
+    applyColumnVisibility(); 
+}
+
+function toggleAllColumns(show) { 
+    document.querySelectorAll('#colManagerList input[type="checkbox"]').forEach(cb => { 
+        cb.checked = show; 
+        cb.dispatchEvent(new Event('change')); 
+    }); 
+}
+
+function applyColumnVisibility() {
+    const styleEl = document.getElementById('dynamic-col-styles'); 
+    const hiddenIndices = Array.from(state.hiddenColumns);
+    if (hiddenIndices.length === 0) { 
+        styleEl.textContent = ''; 
+        return; 
+    }
+    styleEl.textContent = hiddenIndices.map(i => '.col-idx-' + i).join(', ') + ' { display: none !important; }';
+}
+
+function openInspector(text) { 
+    if(!text) return; 
+    let htmlContent = `<p style="line-height:1.8; font-size:0.95rem; white-space:pre-wrap;">${formatCellContent(text)}</p>`; 
+    document.getElementById('inspectorContent').innerHTML = htmlContent; 
+    document.getElementById('inspectorModal').style.display = 'block'; 
+}
+
+// --- Forge Cart & Publishing ---
+function toggleRow(rIdx, sheetName, checkbox) {
+    if(checkbox.checked) {
+        const row = state.fullData.find(r => r.realRowIndex === rIdx); 
+        if(!row) return;
+        const mapping = {}; 
+        document.querySelectorAll('.col-map').forEach(s => mapping[s.dataset.field] = s.value);
+        const getVal = (idx) => (idx !== "" && idx != null) ? (row.cells[parseInt(idx)] || "") : "";
+        state.cart.push({ 
+            user: getVal(mapping.user), 
+            bot: getVal(mapping.bot), 
+            explanation: getVal(mapping.explanation), 
+            description: getVal(mapping.description), 
+            sourceSheet: sheetName, 
+            sourceRow: rIdx 
+        });
+    } else { 
+        state.cart = state.cart.filter(i => i.sourceRow !== rIdx); 
+    }
+    updateCartUI(); 
+    renderLocalTable(state.currentPage);
+}
+
+function updateCartUI() {
+    const c = document.getElementById('cartList'); 
+    c.innerHTML = '';
+    const normBtns = document.getElementById('actionButtonsNormal'), 
+          editBtns = document.getElementById('actionButtonsEdit'), 
+          inputs = document.getElementById('editInputs'), 
+          cartView = document.getElementById('cartView');
+    
+    if (state.editingCartIndex !== null) {
+        document.getElementById('rowDisp').value = `EDIT SLIDE #${state.editingCartIndex + 1}`;
+        inputs.style.display = 'block'; 
+        cartView.style.display = 'none'; 
+        normBtns.style.setProperty('display', 'none', 'important'); 
+        editBtns.style.setProperty('display', 'flex', 'important');
+        const d = state.cart[state.editingCartIndex];
+        document.getElementById('val-user').value = d.user; 
+        document.getElementById('val-bot').value = d.bot; 
+        document.getElementById('val-explanation').value = d.explanation; 
+        document.getElementById('val-description').value = d.description;
+        return;
+    }
+    
+    normBtns.style.setProperty('display', 'flex', 'important'); 
+    editBtns.style.setProperty('display', 'none', 'important');
+    
+    state.cart.forEach((item, i) => { 
+        c.innerHTML += `<div class="cart-item"><div><span class="cart-badge">${i+1}</span><b>${escapeHTML(item.sourceSheet)}</b> #${item.sourceRow}</div><div class="d-flex gap-2"><div style="cursor:pointer; color:var(--primary);" onclick="editCartItem(${i})"><i class="material-icons" style="font-size:16px;">edit</i></div><div style="cursor:pointer; color:#ef4444;" onclick="state.cart.splice(${i},1); updateCartUI(); renderLocalTable(state.currentPage);"><i class="material-icons" style="font-size:16px;">close</i></div></div></div>`; 
+    });
+    
+    if(state.cart.length === 0) {
+        document.getElementById('rowDisp').value = "MANUAL ENTRY"; 
+        document.getElementById('clearBtn').style.display = 'none'; 
+        inputs.style.display = 'block'; 
+        cartView.style.display = 'none';
+    } else {
+        document.getElementById('rowDisp').value = `${state.cart.length} STAGED`; 
+        document.getElementById('clearBtn').style.display = 'block';
+        if(state.cart.length > 1) { 
+            inputs.style.display = 'none'; 
+            cartView.style.display = 'block'; 
+        } else { 
+            inputs.style.display = 'block'; 
+            cartView.style.display = 'none'; 
+            const d = state.cart[0]; 
+            document.getElementById('val-user').value = d.user; 
+            document.getElementById('val-bot').value = d.bot; 
+            document.getElementById('val-explanation').value = d.explanation; 
+            document.getElementById('val-description').value = d.description; 
+        }
+    }
+}
+
+function addCurrentToBatch() { 
+    state.cart.push({ 
+        user: document.getElementById('val-user').value, 
+        bot: document.getElementById('val-bot').value, 
+        explanation: document.getElementById('val-explanation').value, 
+        description: document.getElementById('val-description').value, 
+        sourceSheet: 'Manual', 
+        sourceRow: 'Custom' 
+    }); 
+    updateCartUI(); 
+    showToast("Added to batch queue."); 
+}
+
+function clearCart() { 
+    state.cart = []; 
+    updateCartUI(); 
+    renderLocalTable(state.currentPage); 
+}
+
+function editCartItem(index) { 
+    state.editingCartIndex = index; 
+    updateCartUI(); 
+}
+
+function cancelCartItemEdit() { 
+    state.editingCartIndex = null; 
+    updateCartUI(); 
+}
+
+function saveCartItemEdit() { 
+    if (state.editingCartIndex !== null) { 
+        const item = state.cart[state.editingCartIndex]; 
+        item.user = document.getElementById('val-user').value; 
+        item.bot = document.getElementById('val-bot').value; 
+        item.explanation = document.getElementById('val-explanation').value; 
+        item.description = document.getElementById('val-description').value; 
+        state.editingCartIndex = null; 
+        updateCartUI(); 
+        showToast("Changes saved successfully.", "success"); 
+    } 
+}
+
+function publishToAgents() {
+    if(state.activeWorkflow === 'ALL') return showToast("Please select a specific workflow to publish.", "error");
+    if (state.cart.length === 1) {
+        state.cart[0].user = document.getElementById('val-user').value;
+        state.cart[0].bot = document.getElementById('val-bot').value;
+        state.cart[0].explanation = document.getElementById('val-explanation').value;
+        state.cart[0].description = document.getElementById('val-description').value;
+    }
+    if(state.cart.length === 0) { 
+        if(document.getElementById('val-user').value) addCurrentToBatch(); 
+        else return showToast("The publishing queue is empty.", "error"); 
+    }
+    
+    const btn = document.getElementById('genBtn'); 
+    btn.disabled = true; 
+    btn.innerHTML = '<i class="material-icons" style="font-size:20px;">hourglass_empty</i> PUBLISHING...';
+    
+    const dateStr = document.getElementById('slideDate').value;
+    let baseDate = new Date();
+    if (dateStr) {
+        const parts = dateStr.split('-');
+        baseDate = new Date(parts[0], parts[1] - 1, parts[2]); 
+    }
+    const now = new Date();
+    baseDate.setHours(now.getHours(), now.getMinutes(), now.getSeconds(), 0);
+    const absoluteTime = baseDate.toISOString();
+    
+    const channelTarget = document.getElementById('targetChannel').value; 
+    const payload = state.cart.map(item => ({ ...item, date: absoluteTime, verdict: item.explanation, channel: channelTarget }));
+    
+    google.script.run.withSuccessHandler(res => {
+        btn.disabled = false; 
+        btn.innerHTML = '<i class="material-icons" style="font-size:20px;">rocket_launch</i> PUBLISH LIVE';
+        if(res.success) { 
+            clearCart(); 
+            document.getElementById('val-user').value=''; 
+            document.getElementById('val-bot').value=''; 
+            document.getElementById('val-explanation').value=''; 
+            document.getElementById('val-description').value=''; 
+            showToast(`${res.count} Slides successfully published to ${channelTarget}!`, "success"); 
+            
+            loadPublishedDbForQA(); 
+            loadAgentAlignments();
+        } else {
+            showToast(res.error, "error");
+        }
+    }).publishAlignments(JSON.stringify(payload), state.activeWorkflow);
+}
+
+// --- 7. HYDRA NLP & SEARCH ---
+function toggleSearchMenu(e) { 
+    if (e) e.stopPropagation(); 
+    var popup = document.getElementById('searchMenuPopup'); 
+    if (popup) popup.style.display = popup.style.display === 'none' ? 'block' : 'none'; 
+}
+
+function closeSearchMenu() { 
+    var popup = document.getElementById('searchMenuPopup'); 
+    if (popup) popup.style.display = 'none'; 
+}
+
+function toggleAllSearchTabs(selectAll) { 
+    document.querySelectorAll('.search-tab-cb').forEach(cb => cb.checked = selectAll); 
+}
+
+function populateSearchTabsList(tabsMetadata) { 
+    var list = document.getElementById('searchTabsList'); 
+    if (!list) return; 
+    list.innerHTML = ''; 
+    tabsMetadata.forEach(t => { 
+        list.innerHTML += `<div class="d-flex align-items-center gap-2 p-1"><input type="checkbox" class="neon-checkbox search-tab-cb" value="${escapeHTML(t.name)}" checked><span class="small">${escapeHTML(t.name)}</span></div>`; 
+    }); 
+}
+
+function handleSearch(e) {
+    if(e.key !== 'Enter') return; 
+    var q = e.target.value.trim(); 
+    if(q.length < 2) return;
+    
+    var modeSelect = document.getElementById('searchModeSelect'); 
+    var mode = modeSelect ? modeSelect.value : 'exact'; 
+    var searchInput = document.getElementById('globalSearch');
+
+    if (mode === 'exact') {
+        var qLower = q.toLowerCase();
+        if (state.fullData && state.fullData.length > 0) { 
+            var localMatch = state.fullData.find(row => row.cells.some(c => c && c.toString().toLowerCase().includes(qLower))); 
+            if (localMatch) { 
+                state.specificRowId = localMatch.realRowIndex; 
+                renderLocalTable(state.currentPage); 
+                return; 
+            } 
+        } 
+        
+        loader(true); 
+        searchInput.style.opacity = '0.5'; 
+        searchInput.disabled = true; 
+        showToast("Deep scanning the database...", "info");
+        
+        google.script.run.withSuccessHandler(function(res) {
+            searchInput.style.opacity = '1'; 
+            searchInput.disabled = false; 
+            searchInput.focus();
+            if(!res.success || res.results.length === 0) { 
+                loader(false); 
+                showToast("No matches found.", "info"); 
+                return; 
+            }
+            var match = res.results[0]; 
+            var tabIdx = state.tabs.findIndex(t => t.name === match.sheetName);
+            if (document.getElementById('tabSelect').value != tabIdx) { state.cachedSheet = null; } 
+            document.getElementById('tabSelect').value = tabIdx; 
+            showToast("Match found in: " + match.sheetName, "success");
+            
+            google.script.run.withSuccessHandler(function(cfgRes) {
+                var hRow = (cfgRes.config && cfgRes.config.headerRow) ? parseInt(cfgRes.config.headerRow) : 1;
+                state.pendingMap = (cfgRes.config && cfgRes.config.mapping) ? cfgRes.config.mapping : null; 
+                document.getElementById('headerRow').value = hRow;
+                google.script.run.withSuccessHandler(function(hRes) { 
+                    if(hRes.success) { 
+                        state.headers = hRes.headers; 
+                        updateMaps(); 
+                        loadTable('last', match.row); 
+                    } 
+                }).getSheetHeaders({ spreadsheetId: document.getElementById('sourceId').value, sheetName: match.sheetName, headerRow: hRow });
+            }).loadSheetConfig({ spreadsheetId: document.getElementById('sourceId').value, sheetName: match.sheetName });
+        }).withFailureHandler(function(err) { 
+            searchInput.style.opacity = '1'; 
+            searchInput.disabled = false; 
+            loader(false); 
+            showToast("Global search error encountered.", "error"); 
+        }).searchGlobalFast({ spreadsheetId: document.getElementById('sourceId').value, query: q });
+
+    } else {
+        var cbNodes = document.querySelectorAll('.search-tab-cb:checked'); 
+        var selectedTabs = Array.from(cbNodes).map(cb => cb.value);
+        if (selectedTabs.length === 0) { 
+            showToast("Please select at least one tab to search.", "error"); 
+            toggleSearchMenu(); 
+            return; 
+        }
+        
+        loader(true); 
+        closeSearchMenu(); 
+        searchInput.style.opacity = '0.5';
+        var container = document.getElementById('searchResultsContainer'); 
+        container.innerHTML = `<div class="text-center p-5"><div class="spinner-border text-primary mb-3"></div><div class="fw-bold text-primary">QUERYING HYDRA ENGINE</div><div class="small text-muted">Scanning ${selectedTabs.length} tabs for "${escapeHTML(q)}"...</div></div>`; 
+        document.getElementById('searchResultsModal').style.display = 'block';
+
+        google.script.run.withSuccessHandler(function(res) {
+            loader(false); 
+            searchInput.style.opacity = '1'; 
+            searchInput.value = ''; 
+            
+            if(!res.success) { 
+                container.innerHTML = `<div class="text-danger text-center p-5">${escapeHTML(res.error)}</div>`; 
+                showToast(res.error, "error"); 
+                return; 
+            }
+            if(res.results.length === 0) { 
+                container.innerHTML = `<div class="text-muted text-center p-5 fw-bold">No rows found matching "${escapeHTML(q)}".</div>`; 
+                return; 
+            }
+            
+            window.currentMultiSearchResults = res.results; 
+            window.currentSearchQuery = q;
+            container.innerHTML = `<div class="small text-muted mb-3 border-bottom pb-2" style="border-color:var(--border-glass) !important">Found <b class="text-primary">${res.results.length}</b> matches across <b>${selectedTabs.length}</b> tabs.</div>`;
+            
+            res.results.forEach((item, j) => {
+                var m = item.mapping; 
+                var h = item.headers; 
+                var safeName = escapeForFunctionCall(item.sheetName);
+                
+                var boxHtml = `<div class="p-3 mb-3 border rounded" style="background:var(--surface-glass); border-color:var(--border-glass) !important; border-left:4px solid var(--primary) !important;">
+                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <span class="badge bg-primary">${escapeHTML(item.sheetName)}</span>
+                                        <span class="small text-muted font-code">ROW #${item.row}</span>
+                                    </div>
+                                    <button class="forge-btn forge-btn-ghost px-3 py-1" onclick="jumpToSearchResult('${safeName}', ${item.row})">GO Ã¢â€ â€”</button>
+                                </div>
+                                <div class="row g-3">`;
+                
+                var renderDropdownSlot = function(slotKey, title, colIndex, color) {
+                    var selectHtml = `<select class="form-select form-select-sm glass-input m-0 py-1" onchange="changePreviewMapping(${j}, '${slotKey}', this.value, '${color}')" style="color:${color}; font-weight:bold; font-size:0.7rem; appearance:none;"><option value="-1">Ã¢Å¡ Ã¯Â¸Â SELECT: ${title}</option>`;
+                    for(var c=0; c < h.length; c++) { 
+                        var sel = (c === colIndex) ? "selected" : ""; 
+                        var headName = h[c] && h[c].toString().trim() !== "" ? escapeHTML(h[c].toString()) : ("Col " + (c+1)); 
+                        selectHtml += `<option value="${c}" ${sel}>${headName}</option>`; 
+                    }
+                    selectHtml += `</select>`; 
+                    
+                    return `<div class="col-6">
+                                <div class="p-2 border rounded h-100" style="background:var(--input-bg); border-color:var(--border-glass) !important;">
+                                    <div class="d-flex justify-content-between align-items-center mb-2 pb-2 border-bottom" style="border-color:var(--border-glass) !important; border-bottom-style:dashed !important;">
+                                        <div class="flex-grow-1 overflow-hidden pe-2">${selectHtml}</div>
+                                        <div class="small text-muted cursor-pointer" onclick="toggleExpandBox(this, event)">[+]</div>
+                                    </div>
+                                    <div id="slot-content-${j}-${slotKey}" class="cursor-pointer" onclick="toggleExpandBox(this.previousElementSibling.lastElementChild, event)"></div>
+                                </div>
+                            </div>`;
+                };
+
+                boxHtml += renderDropdownSlot("query", "CONTEXT / QUERY", m.query, "var(--primary)"); 
+                boxHtml += renderDropdownSlot("response", "RESPONSE / REPLY", m.response, "var(--accent)"); 
+                boxHtml += renderDropdownSlot("verdict", "FINAL VERDICT", m.verdict, "var(--success)"); 
+                boxHtml += renderDropdownSlot("discussion", "FINAL DISCUSSION", m.discussion, "var(--text-main)");
+                boxHtml += `</div></div>`; 
+                container.innerHTML += boxHtml;
+                
+                setTimeout(function(idx, mapObj) { 
+                    changePreviewMapping(idx, 'query', mapObj.query, "var(--primary)"); 
+                    changePreviewMapping(idx, 'response', mapObj.response, "var(--accent)"); 
+                    changePreviewMapping(idx, 'verdict', mapObj.verdict, "var(--success)"); 
+                    changePreviewMapping(idx, 'discussion', mapObj.discussion, "var(--text-main)"); 
+                }, 0, j, m);
+            });
+        }).withFailureHandler(function(err) { 
+            loader(false); 
+            searchInput.style.opacity = '1'; 
+            document.getElementById('searchResultsContainer').innerHTML = '<div class="text-danger p-4 text-center">Network Error</div>'; 
+            showToast("Search error encountered.", "error"); 
+        }).searchAdvancedMultiTab({ spreadsheetId: document.getElementById('sourceId').value, query: q, tabs: selectedTabs });
+    }
+}
+
+function jumpToSearchResult(sheetName, row) {
+    closeModal('searchResultsModal'); 
+    var tabIdx = state.tabs.findIndex(t => t.name === sheetName); 
+    if(tabIdx === -1) return;
+    
+    document.getElementById('tabSelect').value = tabIdx; 
+    state.cachedSheet = null; 
+    
+    google.script.run.withSuccessHandler(function(cfgRes) {
+        var hRow = (cfgRes.config && cfgRes.config.headerRow) ? parseInt(cfgRes.config.headerRow) : 1; 
+        document.getElementById('headerRow').value = hRow; 
+        state.pendingMap = (cfgRes.config && cfgRes.config.mapping) ? cfgRes.config.mapping : null;
+        
+        google.script.run.withSuccessHandler(function(hRes) { 
+            if(hRes.success) { 
+                state.headers = hRes.headers; 
+                updateMaps(); 
+                loadTable('last', row); 
+            } 
+        }).getSheetHeaders({ spreadsheetId: document.getElementById('sourceId').value, sheetName: sheetName, headerRow: hRow });
+    }).loadSheetConfig({ spreadsheetId: document.getElementById('sourceId').value, sheetName: sheetName });
+}
+
+function toggleExpandBox(btnEl, event) { 
+    if(event) event.stopPropagation(); 
+    var boxContainer = btnEl.parentElement.nextElementSibling; 
+    var textDiv = boxContainer.firstElementChild; 
+    if(!textDiv || !textDiv.style) return; 
+    
+    if(textDiv.style.webkitLineClamp === 'unset'){ 
+        textDiv.style.webkitLineClamp = '3'; 
+        btnEl.innerText = '[+]'; 
+    } else { 
+        textDiv.style.webkitLineClamp = 'unset'; 
+        btnEl.innerText = '[-]'; 
+    } 
+}
+
+function changePreviewMapping(resultIndex, slotKey, newColIndex, color) {
+    var item = window.currentMultiSearchResults[resultIndex]; 
+    var newText = (newColIndex != -1 && newColIndex != "") ? item.rowData[newColIndex] : ""; 
+    var q = window.currentSearchQuery || ""; 
+    var contentHtml = "";
+    
+    if (!newText || newText.toString().trim() === "") { 
+        contentHtml = '<div class="small text-muted fst-italic mt-1">N/A (Select correct column above)</div>'; 
+    } else {
+        var safeText = escapeHTML(newText.toString()); 
+        var highlighted = safeText;
+        if (q.length > 0) { 
+            var qRegex = new RegExp('(' + q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi'); 
+            highlighted = safeText.replace(qRegex, `<span style="background:rgba(var(--primary-rgb), 0.3); color:var(--text-main); padding:0 2px; border-radius:2px; font-weight:bold; border:1px solid var(--primary)">$1</span>`); 
+        }
+        var style = "color:var(--text-main);";
+        if (slotKey === "verdict") { 
+            if (newText.toString().toLowerCase().indexOf('violation') > -1) style = "color:var(--danger); font-weight:bold;"; 
+            else if (newText.toString().toLowerCase().indexOf('safe') > -1 || newText.toString().toLowerCase().indexOf('no violation') > -1 || newText.toString().toLowerCase().indexOf('ok') > -1) style = "color:var(--success); font-weight:bold;"; 
+        }
+        contentHtml = `<div style="font-size:0.85rem; ${style} line-height:1.5; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; word-break:break-word; white-space:pre-wrap; margin-top:5px;">${highlighted}</div>`;
+    }
+    var container = document.getElementById('slot-content-' + resultIndex + '-' + slotKey); 
+    if (container) container.innerHTML = contentHtml;
+}
+
+// Background Mining
+function openSettings() { 
+    fetchAutoSyncStatus(); 
+    document.getElementById('settingsModal').style.display = 'block'; 
+}
+
+function loadBugCache() { 
+    google.script.run.withSuccessHandler(res => { 
+        if(res.data) Object.assign(localBugCache, res.data); 
+        if(!res.done) loadBugCache(); 
+    }).getBugCacheChunked(2, 300); 
+}
+
+function startDbSync() { 
+    showToast("Starting Gmail data mining...", "info"); 
+    document.getElementById('startSyncBtn').disabled = true; 
+    google.script.run.withSuccessHandler(res => { 
+        document.getElementById('startSyncBtn').disabled = false; 
+        showToast("Data mining complete.", "success"); 
+        loadBugCache(); 
+    }).syncBugBatch(0); 
+}
+
+function fetchAutoSyncStatus() { 
+    google.script.run.withSuccessHandler(isActive => { 
+        const btn = document.getElementById('autoSyncBtn'); 
+        if(btn) { 
+            btn.dataset.active = isActive ? "true" : "false"; 
+            if(isActive) { 
+                btn.innerHTML = "Ã°Å¸Å¸Â¢ AUTO-SYNC: ON"; 
+                btn.classList.remove('forge-btn-ghost'); 
+                btn.classList.add('forge-btn-success'); 
+            } else { 
+                btn.innerHTML = "Ã¢Å¡Âª AUTO-SYNC: OFF"; 
+                btn.classList.add('forge-btn-ghost'); 
+                btn.classList.remove('forge-btn-success'); 
+            } 
+        } 
+    }).getAutoSyncStatus(); 
+}
+
+function toggleAutoSyncUI() { 
+    const btn = document.getElementById('autoSyncBtn'); 
+    const isCurrentlyActive = btn.dataset.active === "true"; 
+    btn.innerHTML = "Ã¢ÂÂ³ PLEASE WAIT..."; 
+    btn.disabled = true; 
+    google.script.run.withSuccessHandler(res => { 
+        btn.disabled = false; 
+        fetchAutoSyncStatus(); 
+        showToast(res.msg, res.active ? "success" : "info"); 
+    }).toggleAutoSync(!isCurrentlyActive); 
+}
+
+// --- 8. AGENT UI: MULTI-CHANNEL TIMELINE & SIDE-SHEET ENGINE ---
+function switchAgentChannel(channelName, el) {
+    activeAgentChannel = channelName;
+    switchView('alignments', el);
+    
+    const titleEl = document.getElementById('agentChannelTitle');
+    if(titleEl) {
+        titleEl.innerText = channelName.toUpperCase();
+        titleEl.style.color = ''; 
+        
+        if (channelName.toLowerCase().includes('Knowledge') || channelName.toLowerCase().includes('or')) { 
+            titleEl.style.color = '#fbbf24'; 
+        } else if (channelName.toLowerCase().includes('PLAYBOOK') || channelName.toLowerCase().includes('slide')) { 
+            titleEl.style.color = '#60a5fa'; 
+        } else if (channelName.toLowerCase().includes('urgent')) { 
+            titleEl.style.color = '#e11d48'; 
+        } else { 
+            titleEl.style.color = '#10b981'; 
+        }
+    }
+    closeAgentSideSheet();
+    filterDigitalSlides();
+}
+
+/**
+ * FEATURE: Side-Sheet & Expand Controllers (Unificati con UX 2026 Focus Mode)
+ */
+function openAgentSideSheet(item) {
+    if (!item) return;
+
+    window.currentActiveSlide = item;
+
+    const bodyEl = document.getElementById('agentSideSheetBody');
+    let vText = (item.verdict || "Review").trim();
+    let vLower = vText.toLowerCase();
+    let verdictCss = 'warning';
+    
+    if(vLower.includes('no violation') || vLower.includes('safe') || vLower.includes('ok') || vLower.includes('non violative')) verdictCss = 'safe';
+    else if(vLower.includes('violation') || vLower.includes('dangerous') || vLower.includes('harm') || vLower.includes('impersonation')) verdictCss = 'violation';
+
+    let historyHtml = '';
+    if(item._history) {
+        const histDate = new Date(item._history.date).toLocaleDateString();
+        const histVerdict = escapeHTML(item._history.verdict || 'N/A');
+        const histDesc = formatCellContent(item._history.description || 'N/A');
+        
+        historyHtml = '<div class="mt-3 p-3 border rounded" style="background:rgba(var(--primary-rgb),0.05); border-color:var(--border-glass)!important;">' +
+            '<div class="expand-card-header" style="margin-bottom:8px;"><i class="material-icons align-middle me-1">history</i> Decision Timeline</div>' +
+            '<div class="text-muted small mb-2">Previous verdict on ' + histDate + ': <span class="badge bg-secondary">' + histVerdict + '</span></div>' +
+            '<div class="expand-card-body custom-scroll" style="font-size:0.9rem; max-height:150px;">' + histDesc + '</div>' +
+            '</div>';
+    }
+
+    var expandBtn = '<button class="forge-btn forge-btn-ghost px-3 py-1" style="font-size:0.8rem;" onclick="openSlideExpandModal()"><i class="material-icons" style="font-size:16px; vertical-align:middle;">open_in_full</i> Expand</button>';
+    var deleteBtn = '';
+    
+    if (APP_TEAM === 'QA') {
+        deleteBtn = '<button class="forge-btn forge-btn-ghost text-danger border-danger px-3 py-1" style="font-size:0.8rem;" onclick="deleteDigitalSlide()"><i class="material-icons" style="font-size:16px; vertical-align:middle;">delete</i> Delete</button>';
+    }
+    
+    var actionFooter = '<div class="d-flex justify-content-end gap-2 mt-4 pt-3 border-top opacity-50" style="border-color:var(--border-glass)!important;">' + deleteBtn + expandBtn + '</div>';
+
+    var html = '<div class="expand-verdict-banner ' + verdictCss + '" style="padding: 16px 24px;">' +
+               '<div class="fw-bold text-uppercase" style="font-size: 0.75rem; letter-spacing: 1px; opacity: 0.8; margin-bottom: 4px;">Alignment Verdict</div>' +
+               '<div style="font-size: 1.4rem; font-weight: 800; font-family: var(--font-display);">' + escapeHTML(vText) + '</div>' +
+               '</div>' +
+               
+               '<div class="d-flex flex-column gap-3 mt-3">' +
+               
+               '<div class="expand-card prompt-card w-100" style="padding: 16px;">' +
+               '<div class="expand-card-header" style="margin-bottom:10px;"><i class="material-icons align-middle me-1">face</i> User Prompt Context</div>' +
+               '<div class="expand-card-body custom-scroll" style="max-height: 25vh;">' + formatCellContent(item.user) + '</div>' +
+               '</div>' +
+               
+               '<div class="expand-card bot-card w-100" style="padding: 16px;">' +
+               '<div class="expand-card-header" style="margin-bottom:10px;"><i class="material-icons align-middle me-1">smart_toy</i> Model Bot Response</div>' +
+               '<div class="expand-card-body custom-scroll" style="max-height: 30vh;">' + formatCellContent(item.bot || 'N/A') + '</div>' +
+               '</div>' +
+               
+               '<div class="expand-card logic-card" style="padding: 16px;">' +
+               '<div class="expand-card-header text-success" style="margin-bottom:10px;"><i class="material-icons align-middle me-1">gavel</i> QA Logic & Explanation</div>' +
+               '<div class="expand-card-body custom-scroll" style="font-size: 1rem; max-height: 30vh;">' + formatCellContent(item.description || 'N/A') + '</div>' +
+               '</div>' +
+               
+               historyHtml +
+               actionFooter +
+               '</div>';
+
+    bodyEl.innerHTML = html;
+    document.getElementById('agentSideSheet').classList.add('open');
+}
+
+/**
+ * FEATURE: UX 2026 Focus Mode (Expand Modal)
+ */
+function openSlideExpandModal() {
+    var item = window.currentActiveSlide;
+    if(!item) return;
+    
+    var vText = (item.verdict || "Review").trim();
+    var vLower = vText.toLowerCase();
+    var verdictCss = 'warning';
+    if(vLower.includes('no violation') || vLower.includes('safe') || vLower.includes('ok') || vLower.includes('non violative')) verdictCss = 'safe';
+    else if(vLower.includes('violation') || vLower.includes('dangerous') || vLower.includes('harm') || vLower.includes('impersonation')) verdictCss = 'violation';
+
+    var histHtml = '';
+    if(item._history) {
+        histHtml = '<div class="mt-4 p-4 border rounded" style="background:rgba(var(--primary-rgb),0.05); border-color:var(--border-glass)!important;">' +
+                   '<div class="expand-card-header"><i class="material-icons align-middle me-1">history</i> Decision Timeline</div>' +
+                   '<div class="text-muted small mb-2">Previous verdict on ' + new Date(item._history.date).toLocaleDateString() + ': <span class="badge bg-secondary">' + escapeHTML(item._history.verdict) + '</span></div>' +
+                   '<div class="expand-card-body custom-scroll" style="font-size:0.95rem;">' + formatCellContent(item._history.description) + '</div></div>';
+    }
+
+    var html = '<div class="expand-verdict-banner ' + verdictCss + '">' +
+               '<div class="fw-bold text-uppercase" style="font-size: 0.85rem; letter-spacing: 1px; opacity: 0.8; margin-bottom: 6px;">Alignment Verdict</div>' +
+               '<div style="font-size: 1.8rem; font-weight: 800; font-family: var(--font-display);">' + escapeHTML(vText) + '</div>' +
+               '</div>' +
+               '<div class="row g-4 mt-1">' +
+               '<div class="col-md-6 d-flex">' +
+               '<div class="expand-card prompt-card w-100">' +
+               '<div class="expand-card-header"><i class="material-icons align-middle me-1">face</i> User Prompt Context</div>' +
+               '<div class="expand-card-body custom-scroll">' + formatCellContent(item.user) + '</div>' +
+               '</div>' +
+               '</div>' +
+               '<div class="col-md-6 d-flex">' +
+               '<div class="expand-card bot-card w-100">' +
+               '<div class="expand-card-header"><i class="material-icons align-middle me-1">smart_toy</i> Model Bot Response</div>' +
+               '<div class="expand-card-body custom-scroll">' + formatCellContent(item.bot || 'N/A') + '</div>' +
+               '</div>' +
+               '</div>' +
+               '<div class="col-12">' +
+               '<div class="expand-card logic-card">' +
+               '<div class="expand-card-header text-success"><i class="material-icons align-middle me-1">gavel</i> QA Logic & Explanation</div>' +
+               '<div class="expand-card-body custom-scroll" style="font-size: 1.1rem; line-height: 1.8;">' + formatCellContent(item.description || 'N/A') + '</div>' +
+               '</div>' +
+               '</div>' +
+               '<div class="col-12">' + histHtml + '</div>' +
+               '</div>';
+               
+    document.getElementById('slideExpandModalBody').innerHTML = html;
+    
+    closeAgentSideSheet();
+    slideExpandModalObj.show();
+}
+
+/**
+ * FEATURE: QA Delete Engine
+ */
+function deleteDigitalSlide() {
+    var item = window.currentActiveSlide;
+    if(!item) return;
+    
+    var workflow = document.getElementById('agentWorkflowFilter').value || 'WF-DEMO';
+    
+    if(confirm("Are you sure you want to permanently delete this slide? This action cannot be undone.")) {
+        loader(true);
+        google.script.run.withSuccessHandler(function(res) {
+            loader(false);
+            if(res.success) {
+                showToast(res.message, "success");
+                closeAgentSideSheet();
+                loadAgentAlignments();
+                if (APP_TEAM === 'QA') loadPublishedDbForQA();
+            } else {
+                showToast(res.error, "error");
+            }
+        }).deleteAlignment(item.date, workflow);
+    }
+}
+
+function closeAgentSideSheet() {
+    document.getElementById('agentSideSheet').classList.remove('open');
+    if (document.activeElement) document.activeElement.blur();
+}
+
+function loadAgentAlignments() {
+    const workflow = document.getElementById('agentWorkflowFilter')?.value || 'WF-DEMO';
+    document.getElementById('emptyGalleryState').style.display = 'block';
+    document.getElementById('alignmentLoader').style.display = 'inline-block';
+    document.getElementById('alignmentLoaderText').innerText = `Loading demo slides...`;
+    document.getElementById('archiveContainer').style.display = 'none';
+    
+    google.script.run.withSuccessHandler(res => {
+        document.getElementById('emptyGalleryState').style.display = 'none';
+        if(res.success && res.data && res.data.length > 0) {
+            let grouped = {};
+            const normalizeText = (text) => (text || "unknown").toString().trim().toLowerCase().replace(/\s+/g, ' ');
+
+            res.data.forEach(item => {
+                let key = normalizeText(item.user) + "|||" + normalizeText(item.bot) + "|||" + (item.channel || "General KB");
+                if(!grouped[key]) grouped[key] = [];
+                grouped[key].push(item);
+            });
+            
+            let processedData = [];
+            for(let key in grouped) {
+                let versions = grouped[key].sort((a, b) => new Date(b.date) - new Date(a.date));
+                let master = { ...versions[0] };
+                let history = null;
+                for(let i = 1; i < versions.length; i++) {
+                    let old = versions[i];
+                    if((old.verdict||"").trim() !== (master.verdict||"").trim() || (old.description||"").trim() !== (master.description||"").trim()) {
+                        history = { date: old.date, verdict: old.verdict, description: old.description };
+                        break; 
+                    }
+                }
+                master._history = history;
+                processedData.push(master);
+            }
+            
+            agentAlignmentsData = processedData.sort((a,b) => new Date(b.date) - new Date(a.date));
+            extractAndRenderVerdictDropdown(agentAlignmentsData);
+            filterDigitalSlides();
+        } else {
+            agentAlignmentsData = [];
+            document.getElementById('emptyGalleryState').style.display = 'block';
+            document.getElementById('alignmentLoader').style.display = 'none';
+            document.getElementById('alignmentLoaderText').innerHTML = `<i class="material-icons" style="font-size:48px; opacity:0.5">speaker_notes_off</i><h4 class="mt-3">No Demo Slides Found</h4><p>QAs have not published any slides for ${workflow} yet.</p>`;
+        }
+    }).fetchAlignments(workflow);
+}
+
+function extractAndRenderVerdictDropdown(data) {
+    const sel = document.getElementById('agentVerdictDropdown');
+    if(!sel) return;
+    
+    sel.innerHTML = `<option value="ALL">Ã¢Ë†Å¾ All Policies</option>`;
+    const verdicts = new Set();
+    
+    data.filter(d => (d.channel || 'General KB') === activeAgentChannel).forEach(d => verdicts.add((d.verdict || 'Review').trim()));
+    
+    Array.from(verdicts).sort().forEach(v => {
+        const safeV = escapeHTML(v);
+        const selected = activeVerdictFilter === v ? 'selected' : '';
+        sel.innerHTML += `<option value="${safeV}" ${selected}>${safeV}</option>`;
+    });
+}
+
+function onVerdictFilterChange(val) {
+    activeVerdictFilter = val;
+    filterDigitalSlides();
+}
+
+function filterDigitalSlides() {
+    const q = document.getElementById('agentSearchInput') ? document.getElementById('agentSearchInput').value.toLowerCase() : "";
+    let filtered = agentAlignmentsData;
+    
+    filtered = filtered.filter(d => (d.channel || 'General KB') === activeAgentChannel);
+    if(q) {
+        filtered = filtered.filter(d => (d.user||"").toLowerCase().includes(q) || (d.bot||"").toLowerCase().includes(q) || (d.verdict||"").toLowerCase().includes(q) || (d.description||"").toLowerCase().includes(q));
+    }
+    if(activeVerdictFilter !== 'ALL') {
+        filtered = filtered.filter(d => (d.verdict || 'Review').trim() === activeVerdictFilter);
+    }
+
+    const accordion = document.getElementById('monthlyAccordion');
+    if(!accordion) return;
+    accordion.innerHTML = '';
+
+    if(filtered.length === 0) {
+        document.getElementById('archiveContainer').style.display = 'none';
+        document.getElementById('emptyGalleryState').style.display = 'block';
+        document.getElementById('alignmentLoader').style.display = 'none';
+        document.getElementById('alignmentLoaderText').innerHTML = `<i class="material-icons" style="font-size:48px; opacity:0.5">search_off</i><h4 class="mt-3">No matches found</h4><p>Try clearing the filters or switch channel.</p>`;
+        return;
+    }
+    document.getElementById('emptyGalleryState').style.display = 'none';
+    document.getElementById('archiveContainer').style.display = 'block';
+
+    const chronoTree = {};
+
+    filtered.forEach(item => {
+        const itemDate = new Date(item.date || new Date());
+        const monthYearStr = itemDate.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+        
+        const firstDayIdx = new Date(itemDate.getFullYear(), itemDate.getMonth(), 1).getDay();
+        const weekNum = Math.ceil((itemDate.getDate() + firstDayIdx) / 7);
+        const weekStr = `Week ${weekNum}`;
+
+        if (!chronoTree[monthYearStr]) chronoTree[monthYearStr] = {};
+        if (!chronoTree[monthYearStr][weekStr]) chronoTree[monthYearStr][weekStr] = [];
+        chronoTree[monthYearStr][weekStr].push(item);
+    });
+
+    Object.keys(chronoTree).forEach((monthYear, mIdx) => {
+        const monthItem = document.createElement('div');
+        monthItem.className = 'accordion-item';
+        
+        const isMonthOpen = mIdx === 0 ? 'show' : '';
+        const isMonthCollapsed = mIdx === 0 ? '' : 'collapsed';
+
+        let weeklyAccordionHtml = `<div class="accordion accordion-glass weekly-accordion-wrapper" id="weekly-acc-${mIdx}">`;
+        
+        const weeks = Object.keys(chronoTree[monthYear]).sort((a,b) => b.localeCompare(a));
+        weeks.forEach((weekStr, wIdx) => {
+            const isWeekOpen = (mIdx === 0 && wIdx === 0) ? 'show' : '';
+            const isWeekCollapsed = (mIdx === 0 && wIdx === 0) ? '' : 'collapsed';
+            
+            weeklyAccordionHtml += `
+                <div class="accordion-item">
+                    <h3 class="accordion-header" id="head-wk-${mIdx}-${wIdx}">
+                        <button class="accordion-button ${isWeekCollapsed}" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-wk-${mIdx}-${wIdx}">
+                            <i class="material-icons me-2" style="font-size:18px; opacity:0.7">date_range</i> ${weekStr}
+                        </button>
+                    </h3>
+                    <div id="collapse-wk-${mIdx}-${wIdx}" class="accordion-collapse collapse ${isWeekOpen}">
+                        <div class="accordion-body flex-column d-flex" style="gap: 8px;" id="body-wk-${mIdx}-${wIdx}"></div>
+                    </div>
+                </div>`;
+        });
+        weeklyAccordionHtml += `</div>`;
+
+        monthItem.innerHTML = `
+            <h2 class="accordion-header" id="head-mo-${mIdx}">
+                <button class="accordion-button ${isMonthCollapsed}" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-mo-${mIdx}">
+                    <i class="material-icons me-2" style="font-size:20px;">calendar_month</i> ${monthYear}
+                </button>
+            </h2>
+            <div id="collapse-mo-${mIdx}" class="accordion-collapse collapse ${isMonthOpen}">
+                <div class="accordion-body">${weeklyAccordionHtml}</div>
+            </div>`;
+        
+        accordion.appendChild(monthItem);
+
+        weeks.forEach((weekStr, wIdx) => {
+            const container = document.getElementById(`body-wk-${mIdx}-${wIdx}`);
+            chronoTree[monthYear][weekStr].forEach(item => {
+                const tmpl = document.getElementById('compact-case-row-tmpl');
+                const clone = tmpl.content.cloneNode(true);
+                
+                const rowEl = clone.querySelector('.compact-case-item');
+                rowEl.onclick = () => openAgentSideSheet(item);
+                
+                clone.querySelector('.compact-case-date').textContent = new Date(item.date || new Date()).toLocaleDateString();
+                
+                const badge = clone.querySelector('.compact-case-badge');
+                let vText = (item.verdict || "Review").trim();
+                let vLower = vText.toLowerCase();
+                badge.textContent = vText;
+                if(vLower.includes('no violation') || vLower.includes('safe') || vLower.includes('ok')) badge.classList.add('safe');
+                else if(vLower.includes('violation') || vLower.includes('dangerous') || vLower.includes('harm') || vLower.includes('impersonation')) badge.classList.add('violation');
+                else badge.classList.add('warning');
+
+                clone.querySelector('.compact-case-preview-text').textContent = item.user || "N/A Context Prompt";
+                container.appendChild(clone);
+            });
+        });
+    });
+}
+
+// --- 9. JIXY AI COPILOT ---
+document.addEventListener('mousemove', (event) => { 
+    const win = document.getElementById('ai-chat-window'); 
+    if (!win || !win.classList.contains('ai-hidden')) return; 
+    const moveX = ((event.clientX / window.innerWidth) - 0.5) * 16, moveY = ((event.clientY / window.innerHeight) - 0.5) * 16; 
+    document.querySelectorAll('.ai-pupil').forEach(p => p.style.transform = `translate(${moveX}px, ${moveY}px)`); 
+});
+
+function toggleAI() { 
+    const win = document.getElementById('ai-chat-window');
+    const btn = document.getElementById('ai-toggle-btn'); 
+    win.classList.toggle('ai-hidden'); 
+    if (!win.classList.contains('ai-hidden')) { 
+        document.getElementById('ai-input').focus(); 
+        document.querySelectorAll('.ai-pupil').forEach(p => p.style.transform = 'translate(0,0)'); 
+        btn.style.transform = 'scale(0.9)'; 
+        btn.style.animationPlayState = 'paused'; 
+    } else { 
+        btn.style.transform = 'scale(1)'; 
+        btn.style.animationPlayState = 'running'; 
+    } 
+}
+
+function handleAiEnter(e) { 
+    if (e.key === 'Enter') sendAiMessage(); 
+}
+
+function sendQuickAiMessage(text) { 
+    document.getElementById('ai-input').value = text; 
+    sendAiMessage(); 
+    document.getElementById('ai-quick-chips').style.display = 'none'; 
+}
+
+function sendAiMessage() { 
+    const input = document.getElementById('ai-input');
+    const text = input.value.trim(); 
+    if (!text) return; 
+    addMessage(text, 'user'); 
+    input.value = ''; 
+    const loadId = addMessage(`<div class="d-flex align-items-center gap-2"><div class="spinner-grow spinner-grow-sm text-primary" style="width: 12px; height: 12px;"></div><div class="spinner-grow spinner-grow-sm text-accent" style="width: 12px; height: 12px; animation-delay: 0.1s;"></div><div class="spinner-grow spinner-grow-sm text-primary" style="width: 12px; height: 12px; animation-delay: 0.2s;"></div><span class="ms-2 text-muted" style="font-size:0.85rem">Analyzing...</span></div>`, 'bot', true); 
+    setTimeout(() => { 
+        removeMessage(loadId); 
+        handleAiResponse(processAILogic(text)); 
+    }, 800); 
+}
+
+function processAILogic(query) {
+    const q = query.toLowerCase();
+    if(q.includes("how") && q.includes("app")) return { type: 'chat', message: `Dashboard: Manage tasks. Forge: Publish digital alignments. Suitcase: Share resources.` };
+    
+    if (isAgent && agentAlignmentsData.length > 0) { 
+        const alignMatches = agentAlignmentsData.filter(d => (d.channel || 'General KB') === activeAgentChannel && ((d.user||"").toLowerCase().includes(q) || (d.verdict||"").toLowerCase().includes(q) || (d.description||"").toLowerCase().includes(q))); 
+        if(alignMatches.length > 0) { 
+            document.getElementById('agentSearchInput').value = q; 
+            filterDigitalSlides(); 
+            return { type: 'chat', message: `I filtered the ${activeAgentChannel} gallery! Found ${alignMatches.length} slides containing "${q}".` }; 
+        } 
+    }
+    
+    const stopWords = ['the','find','search','open','and','or']; 
+    const tokens = q.replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(w => w.length > 2 && !stopWords.includes(w)); 
+    if (tokens.length === 0) return { type: 'chat', message: "Please be more specific." };
+    
+    let searchableDB = qaDatabase; 
+    if (isAgent) searchableDB = qaDatabase.filter(d => d.isAgentVisible === true);
+    
+    const scoredDocs = searchableDB.map(doc => { 
+        let score = 0; let matchCount = 0; 
+        tokens.forEach(t => { 
+            let matched = false; 
+            if (doc.tags && doc.tags.some(tg => tg.toLowerCase().includes(t))) { score += 25; matched = true; } 
+            if (doc.keywords && doc.keywords.some(kw => kw.toLowerCase().includes(t))) { score += 25; matched = true; } 
+            if (doc.title.toLowerCase().includes(t)) { score += 15; matched = true; } 
+            if (matched) matchCount++; 
+        }); 
+        return { ...doc, score, matchCount }; 
+    });
+    
+    let filteredDocs = scoredDocs.filter(d => d.matchCount > 0).sort((a, b) => b.score - a.score).slice(0, 3); 
+    if (filteredDocs.length > 0) return { type: 'results', data: filteredDocs, message: "Found these resources:" };
+    
+    return { type: 'chat', message: "No exact semantic match found in documents." };
+}
+
+function handleAiResponse(res) { 
+    if (res.type === 'results') { 
+        addMessage(res.message, 'bot'); 
+        res.data.forEach(item => { 
+            const div = document.createElement('div'); 
+            div.className = 'result-card-ai'; 
+            div.innerHTML = `<span class="res-title"><i class="material-icons" style="font-size:18px;">link</i> ${escapeHTML(item.title)}</span><div class="text-muted" style="font-size:0.8rem">${escapeHTML(item.category)}</div>`; 
+            div.onclick = () => window.open(item.url, '_blank'); 
+            document.getElementById('ai-messages').appendChild(div); 
+        }); 
+        scrollToBottom(); 
+    } else {
+        addMessage(res.message, 'bot'); 
+    }
+}
+
+function addMessage(t, s, tmp = false) { 
+    const div = document.createElement('div'); 
+    div.className = `msg msg-${s}`; 
+    div.innerHTML = t; 
+    if (tmp) div.id = 'ai-temp-' + Date.now(); 
+    document.getElementById('ai-messages').appendChild(div); 
+    scrollToBottom(); 
+    return div.id; 
+}
+
+function removeMessage(id) { 
+    const el = document.getElementById(id); 
+    if (el) el.remove(); 
+}
+
+function scrollToBottom() { 
+    const c = document.getElementById('ai-messages'); 
+    setTimeout(() => c.scrollTop = c.scrollHeight, 50); 
+}
+
